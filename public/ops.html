@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>运营工作台 · 分群系统</title>
+  <link rel="icon" href="assets/logo-icon.png" type="image/png"/>
+  <link rel="stylesheet" href="assets/common.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <a href="/kequn/system/ops.html" class="brand-home"><img src="assets/logo.png" alt="分群数据" class="brand-logo"/></a>
+      <a href="/kequn/system/admin.html" class="sidebar-back" id="backAdmin" style="display:none">← 返回系统管理</a>
+      <h2>运营工作台</h2>
+      <p class="muted" id="userName"></p>
+      <div class="store-name" id="sidebarStoreName">—</div>
+      <div class="store-meta" id="sidebarStoreMeta"></div>
+    </div>
+    <div class="store-bar" style="padding:0 4px 10px">
+      <div><label class="muted" style="font-size:.78rem">当前门店</label>
+        <select id="globalStore" style="width:100%"></select>
+      </div>
+    </div>
+    <div class="sidebar-group-hd">业绩诊断</div>
+    <nav class="sidebar-subnav" id="diagSidebarNav">
+      <a href="#diagnosis-overview" data-tab="diagnosis" data-diag="overview" class="active"><span class="dot"></span>业绩概览</a>
+      <a href="#diagnosis-dim" data-tab="diagnosis" data-diag="dim"><span class="dot"></span>三维度诊断</a>
+      <a href="#diagnosis-multi" data-tab="diagnosis" data-diag="multi"><span class="dot"></span>多店对比</a>
+      <a href="#diagnosis-report" data-tab="diagnosis" data-diag="report"><span class="dot"></span>报告中心</a>
+    </nav>
+    <div class="sidebar-group-hd sidebar-group-row">
+      <span>运营方案</span>
+      <div class="sidebar-mode-toggle" id="sidebarSolMode">
+        <button type="button" class="active" data-solmode="single">单店</button>
+        <button type="button" data-solmode="multi">多店</button>
+      </div>
+    </div>
+    <nav class="sidebar-subnav">
+      <a href="#solutions-site" data-tab="solutions-hub" data-cat="site"><span class="dot"></span>选址与闭店策略<span class="sidebar-hint">过店</span></a>
+      <a href="#solutions-capture" data-tab="solutions-hub" data-cat="capture"><span class="dot"></span>捕获率提升策略<span class="sidebar-hint">进店</span></a>
+      <a href="#solutions-conversion" data-tab="solutions-hub" data-cat="conversion"><span class="dot"></span>转化率提升策略<span class="sidebar-hint">成交</span></a>
+      <a href="#solutions-aov" data-tab="solutions-hub" data-cat="aov"><span class="dot"></span>客单价提升策略<span class="sidebar-hint">客单</span></a>
+    </nav>
+    <div class="sidebar-group-hd">客群基本信息</div>
+    <nav class="sidebar-subnav">
+      <a href="#customer-report" data-tab="customer" data-cat="report"><span class="dot"></span>综合报告</a>
+      <a href="#customer-matrix" data-tab="customer" data-cat="matrix"><span class="dot"></span>客群矩阵</a>
+      <a href="#customer-age-sex" data-tab="customer" data-cat="age-sex"><span class="dot"></span>年龄性别</a>
+      <a href="#customer-time-peak" data-tab="customer" data-cat="time-peak"><span class="dot"></span>时段高峰</a>
+      <a href="#customer-flow-trend" data-tab="customer" data-cat="flow-trend"><span class="dot"></span>客流趋势</a>
+    </nav>
+    <div class="sidebar-group-hd">策略推送与运营闭环</div>
+    <nav>
+      <a href="#push" data-tab="push"><span class="dot"></span>策略推送</a>
+      <a href="#tasks" data-tab="tasks"><span class="dot"></span>任务管理</a>
+    </nav>
+    <button class="btn secondary" style="margin-top:auto;width:calc(100% - 8px)" id="logoutBtn">退出</button>
+  </aside>
+
+  <div class="main-area">
+    <main class="main">
+
+    <!-- ============ 一、业绩诊断 ============ -->
+    <section id="tab-diagnosis">
+      <div id="diagPanelOverview">
+        <div id="dashboardArea"><p class="muted">加载门店数据…</p></div>
+        <div class="card">
+          <h3>经营目标设定</h3>
+          <p class="muted">设定日 / 周 / 月营业额目标，实时查看达成率</p>
+          <div id="targetPanel"><p class="muted">加载目标数据…</p></div>
+        </div>
+      </div>
+
+      <div id="diagPanelDim" style="display:none">
+        <div class="card">
+          <div class="step-nav" id="diagDimNav">
+            <button type="button" class="step-pill active" data-dim="revenue">① 营业额诊断</button>
+            <button type="button" class="step-pill" data-dim="margin">② 毛利率诊断</button>
+            <button type="button" class="step-pill" data-dim="cost">③ 成本诊断</button>
+          </div>
+          <div class="form-row" id="diagRevenueControls">
+            <div><label>开始</label><input type="date" id="startDate"/></div>
+            <div><label>结束</label><input type="date" id="endDate"/></div>
+            <button type="button" class="btn secondary quick-range active" data-days="7">近7天</button>
+            <button type="button" class="btn secondary quick-range" data-days="30">近30天</button>
+            <button class="btn" id="runDiag">运行诊断</button>
+          </div>
+          <div id="diagDimRevenue"><div id="diagResult"></div></div>
+          <div id="diagDimMargin" style="display:none"><p class="muted">加载毛利率诊断…</p></div>
+          <div id="diagDimCost" style="display:none"><p class="muted">加载成本诊断…</p></div>
+        </div>
+      </div>
+
+      <div id="diagPanelMulti" style="display:none">
+        <div class="card">
+          <h3>多店经营对比看板</h3>
+          <p class="muted">参考工业投放地图模型，以「客流潜力 × 经营兑现」四象限汇总门店表现；点击地图圆点或表格行可跳转单店诊断</p>
+          <div class="compare-formula muted">客流潜力分 = 日均过店×40% + 进店率×35% + 成交率×25% · 经营兑现分 = 营业额×40% + 毛利率×35% + 月目标达成×25%</div>
+          <div id="compareKpiGrid" class="compare-kpi-grid"></div>
+          <div id="compareQuadFilter" class="compare-quad-filter"></div>
+        </div>
+        <div class="compare-map-grid">
+          <div class="card">
+            <h3>门店分布地图</h3>
+            <div class="compare-map-box">
+              <div id="compareMap"></div>
+              <div id="compareMapLegend" class="compare-map-legend"></div>
+            </div>
+            <p class="muted compare-map-note">圆点颜色 = 四象限分类，圆点大小 = 客流潜力分；点击门店定位并查看详情</p>
+          </div>
+          <div class="card">
+            <h3>潜力 × 兑现 四象限</h3>
+            <div id="compareQuadChart" class="compare-quad-chart"></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>门店明细对比</h3>
+          <div id="compareTable"><p class="muted">加载中…</p></div>
+        </div>
+      </div>
+
+      <div id="diagPanelReport" style="display:none">
+        <div class="card">
+          <div class="card-hd-row">
+            <div><h3>诊断报告中心</h3><p class="muted">按「诊断 → 方案 → 策略 → 复盘」生成经营报告，可导出打印或定时推送邮箱</p></div>
+            <div class="form-row" style="margin:0">
+              <select id="reportPeriodType"><option value="day">日报</option><option value="week" selected>周报</option><option value="month">月报</option></select>
+              <button class="btn" id="btnGenReport">生成诊断报告</button>
+            </div>
+          </div>
+          <div class="ai-progress-host" id="reportProgressHost"></div>
+          <div id="reportPreview"></div>
+        </div>
+        <div class="card">
+          <h3>定时推送到邮箱</h3>
+          <div class="form-row">
+            <div style="flex:2 1 260px"><label>收件邮箱（多个用逗号分隔）</label><input type="text" id="reportEmails" placeholder="ops@fenqun.local, manager@brand.com"/></div>
+            <div><label>推送频率</label><select id="reportFreq"><option value="daily">每日</option><option value="weekly" selected>每周</option><option value="monthly">每月</option></select></div>
+          </div>
+          <div class="form-row">
+            <button class="btn secondary" id="btnSaveSubscription">保存定时推送</button>
+            <button class="btn secondary" id="btnSendNow">立即发送一次</button>
+            <span class="muted" id="subscriptionStatus"></span>
+          </div>
+        </div>
+        <div class="card">
+          <h3>历史报告</h3>
+          <div id="reportHistoryList"><p class="muted">暂无</p></div>
+        </div>
+        <div class="card" id="reportsCatalogWrap">
+          <h3>全部数据报告目录</h3>
+          <p class="muted">延伸阅读：与 example1 决策看板一致的完整报告库（20+ 交互报告）</p>
+          <div id="reportsCatalog"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 二、运营方案 ============ -->
+    <section id="tab-solutions-hub" style="display:none">
+
+      <div class="solution-cat-panel" id="solCatSite">
+        <div class="sol-mode-panel" id="solSiteSingle">
+          <div id="solSiteClosureSingle"></div>
+          <div class="embed-frame-wrap"><iframe id="frameSite" class="embed-frame" title="商圈地图"></iframe></div>
+        </div>
+        <div class="sol-mode-panel" id="solSiteMulti" style="display:none">
+          <div id="solMultiSite"></div>
+        </div>
+      </div>
+
+      <div class="solution-cat-panel" id="solCatCapture" style="display:none">
+        <div class="sol-mode-panel" id="solCaptureSingle">
+          <div class="sol-feature-grid" id="captureFeatureGrid">
+            <button type="button" class="sol-feature-card active" data-feature="poster">
+              <span class="sol-feature-icon">🎯</span>
+              <span class="sol-feature-body">
+                <span class="sol-feature-title">热点海报</span>
+                <span class="sol-feature-desc">热词 → 时段客群选品 → 海报策略 → 批量生图 → 轮播概览</span>
+              </span>
+            </button>
+            <button type="button" class="sol-feature-card" data-feature="agent">
+              <span class="sol-feature-icon">🤖</span>
+              <span class="sol-feature-body">
+                <span class="sol-feature-title">爆品选品工作台</span>
+                <span class="sol-feature-desc">模拟 Agent 扫描小红书，推荐本地爆品</span>
+              </span>
+            </button>
+          </div>
+
+          <div class="sol-section" id="capturePoster">
+            <div class="embed-frame-wrap embed-frame-wrap-poster">
+              <iframe id="framePoster" class="embed-frame embed-frame-poster" title="爆品促销活动"></iframe>
+            </div>
+          </div>
+
+          <div class="sol-section" id="captureAgent" style="display:none">
+            <div class="card">
+              <div class="agent-flow">
+                <div class="agent-step-card" id="agentStep1">
+                  <div class="agent-step-hd"><span class="agent-step-icon">1</span><strong>定位门店</strong></div>
+                  <p class="muted" id="agentLocationText">点击下方按钮开始</p>
+                </div>
+                <div class="agent-step-card" id="agentStep2">
+                  <div class="agent-step-hd"><span class="agent-step-icon">2</span><strong>启动 Agent · 扫描小红书</strong></div>
+                  <div class="ai-progress-host" id="agentProgressHost"></div>
+                  <div class="agent-log" id="agentLog" style="display:none"></div>
+                </div>
+                <div class="agent-step-card" id="agentStep3">
+                  <div class="agent-step-hd"><span class="agent-step-icon">3</span><strong>爆品推荐清单</strong></div>
+                  <div id="agentPicksGrid"></div>
+                </div>
+              </div>
+              <button type="button" class="btn" id="btnStartAgent" style="margin-top:12px">启动 Agent</button>
+            </div>
+          </div>
+        </div>
+        <div class="sol-mode-panel" id="solCaptureMulti" style="display:none">
+          <div id="solMultiCapture"></div>
+        </div>
+      </div>
+
+      <div class="solution-cat-panel" id="solCatConversion" style="display:none">
+        <div class="sol-mode-panel" id="solConversionSingle">
+          <div id="solConversionTransformSingle"></div>
+          <div class="embed-frame-wrap"><iframe id="frameConversion" class="embed-frame" title="客群品类分析"></iframe></div>
+        </div>
+        <div class="sol-mode-panel" id="solConversionMulti" style="display:none">
+          <div id="solMultiConversion"></div>
+          <div class="embed-frame-wrap"><iframe id="frameConversionMulti" class="embed-frame" title="品类作战地图"></iframe></div>
+        </div>
+      </div>
+
+      <div class="solution-cat-panel" id="solCatAov" style="display:none">
+        <div class="sol-mode-panel" id="solAovSingle">
+          <div class="embed-frame-wrap"><iframe id="frameAov" class="embed-frame" title="购物篮分析"></iframe></div>
+        </div>
+        <div class="sol-mode-panel" id="solAovMulti" style="display:none">
+          <div id="solMultiAov"></div>
+          <div class="embed-frame-wrap"><iframe id="frameAovMulti" class="embed-frame" title="产品矩阵拓展"></iframe></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 客群基本信息 ============ -->
+    <section id="tab-customer" style="display:none">
+      <div class="card">
+        <div class="card-hd-row">
+          <div><h3 id="customerInsightTitle">客群看板</h3><p class="muted">综合报告 · 客群矩阵 · 人群结构 · 时段高峰 · 客流趋势</p></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="muted">时段：</span>
+            <input type="date" id="customerStartDate" style="padding:5px 8px;border-radius:8px;border:1px solid #e2e8f0" />
+            <span class="muted">至</span>
+            <input type="date" id="customerEndDate" style="padding:5px 8px;border-radius:8px;border:1px solid #e2e8f0" />
+          </div>
+        </div>
+        <div id="customerInsightPanel"><p class="muted">加载中…</p></div>
+      </div>
+    </section>
+
+    <!-- ============ 三、策略推送与运营闭环 ============ -->
+    <section id="tab-push" style="display:none">
+      <div class="card hero-lite">
+        <h2>策略推送</h2>
+        <p class="sub">运营闭环第一步：把诊断结论与运营方案转化为可执行任务，推送给门店执行者</p>
+      </div>
+
+      <div class="step-nav" id="pushSubNav">
+        <button type="button" class="step-pill active" data-pushsub="send">发起策略推送</button>
+        <button type="button" class="step-pill" data-pushsub="executors">推送人员管理</button>
+      </div>
+
+      <div id="pushSubSend">
+        <div class="card push-tpl-section">
+          <h3>策略样板库</h3>
+          <p class="muted">默认分析近 7 天四因子强弱；可选用 AI 生成决策，也可跳过 AI 直接填写并推送</p>
+          <div id="pushWeeklyInsight" class="push-weekly-insight muted">加载一周分析结论…</div>
+          <div class="ai-progress-host" id="pushInsightProgressHost"></div>
+          <div id="pushTemplates" class="push-tpl-groups"></div>
+          <div id="pushTplConfirm" class="push-tpl-confirm" style="display:none">
+            <div class="push-tpl-confirm-inner">
+              <div class="push-tpl-confirm-info">
+                <span class="push-tpl-confirm-icon" id="pushTplConfirmIcon"></span>
+                <div>
+                  <strong id="pushTplConfirmName"></strong>
+                  <p class="muted" id="pushTplConfirmDesc"></p>
+                  <p class="muted push-tpl-confirm-hint">可生成 AI 推荐决策，或跳过 AI 直接填写推送</p>
+                </div>
+              </div>
+              <div class="push-tpl-confirm-actions">
+                <button type="button" class="btn secondary" id="btnTplCancel">取消</button>
+                <button type="button" class="btn secondary" id="btnTplSkip">跳过 AI，直接填写</button>
+                <button type="button" class="btn" id="btnTplConfirm">确认，生成 AI 推荐决策</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card push-form-card" id="pushWorkflowCard" style="display:none">
+          <h3>执行策略推送</h3>
+          <p class="muted">① AI 推荐决策（可选）→ ② AI 细化方案（可选）→ ③ 填写完整即可直接推送</p>
+
+          <div id="pushDecisionPanel" class="push-decision-panel"></div>
+          <div class="push-ai-chat" id="pushDecisionChat" style="display:none">
+            <div class="push-ai-chat-hd">
+              <strong>与 AI 追问 · 调整决策</strong>
+              <span class="muted">可直接编辑上方字段，或在此对话让 AI 修改</span>
+            </div>
+            <div class="push-ai-chat-msgs" id="pushDecisionChatMsgs"></div>
+            <div class="push-ai-chat-bar">
+              <input type="text" id="pushDecisionChatInput" placeholder="如：把早高峰时段写得更具体、补充竞品对比…"/>
+              <button type="button" class="btn secondary btn-xs" id="btnDecisionFollowup">发送</button>
+            </div>
+          </div>
+          <div class="ai-progress-host" id="pushDecisionProgressHost"></div>
+
+          <div class="push-toolbar">
+            <div class="push-toolbar-item">
+              <label>门店</label>
+              <select id="pushStore"></select>
+            </div>
+            <div class="push-toolbar-item">
+              <label>截止时限</label>
+              <input type="text" id="pushDeadline" placeholder="如：3天内" value="本周内"/>
+            </div>
+            <div class="push-toolbar-item push-printer-item">
+              <label>门店小票机终端号</label>
+              <div class="push-printer-row">
+                <input type="text" id="pushPrinterCode" placeholder="4004904861" title="易联云终端号，默认 4004904861"/>
+                <button type="button" class="btn secondary btn-xs" id="btnTestPrinter">测试打印</button>
+                <button type="button" class="btn-link" id="btnSavePrinter">保存配置</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="push-exec-block">
+            <div class="push-exec-hd">
+              <label>推送给执行者（可多选）</label>
+              <span class="push-exec-actions">
+                <button type="button" class="btn-link" id="btnExecAll">全选</button>
+                <button type="button" class="btn-link" id="btnExecClear">清空</button>
+              </span>
+            </div>
+            <div id="pushExecChecks" class="exec-chip-list"></div>
+          </div>
+
+          <div class="push-form-grid">
+            <div class="field">
+              <label>任务标题</label>
+              <input type="text" id="pushTitle" placeholder="如：早高峰门口陈列优化"/>
+            </div>
+            <div class="field">
+              <label>策略说明（背景/目标）</label>
+              <textarea id="pushBrief" rows="3" placeholder="简述为什么要做、预期达到什么效果"></textarea>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>执行步骤（每行一条，可编辑；也可用 AI 细化）</label>
+            <textarea id="pushSteps" rows="5" placeholder="1. 调整门口陈列位置&#10;2. 补充关东煮与饮料&#10;3. 拍照上传执行结果"></textarea>
+          </div>
+
+          <div class="field">
+            <label>验收点（每行一条，可编辑）</label>
+            <textarea id="pushVerify" rows="3" placeholder="如：门口陈列拍照上传；店长签字确认"></textarea>
+          </div>
+
+          <div class="push-form-grid push-form-grid--wide">
+            <div class="field">
+              <label>补充背景（选填，供 AI 参考）</label>
+              <textarea id="pushExtra" rows="4" placeholder="如：近7天进店率偏低、购物篮 Lift 6.5 组合等"></textarea>
+            </div>
+            <div class="field push-images-block">
+              <label>附带图片 / 海报</label>
+              <div id="pushImageList" class="push-img-grid"></div>
+              <div class="push-img-actions">
+                <input type="url" id="pushImageUrl" placeholder="图片 URL"/>
+                <button type="button" class="btn secondary btn-xs" id="btnAddImage">添加</button>
+                <button type="button" class="btn secondary btn-xs" id="btnPickPoster">海报库</button>
+                <button type="button" class="btn secondary btn-xs" id="btnUseLatestPoster">最新海报</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="ai-progress-host" id="pushAiProgressHost"></div>
+          <div id="pushAiPreview"></div>
+          <div class="push-ai-chat" id="pushPlanChat" style="display:none">
+            <div class="push-ai-chat-hd">
+              <strong>与 AI 追问 · 调整可执行方案</strong>
+              <span class="muted">可直接编辑上方字段，或在此对话让 AI 细化步骤与验收点</span>
+            </div>
+            <div class="push-ai-chat-msgs" id="pushPlanChatMsgs"></div>
+            <div class="push-ai-chat-bar">
+              <input type="text" id="pushPlanChatInput" placeholder="如：把步骤拆得更细、增加拍照验收要求…"/>
+              <button type="button" class="btn secondary btn-xs" id="btnPlanFollowup">发送</button>
+            </div>
+          </div>
+
+          <div class="push-footer-bar">
+            <button type="button" class="btn" id="btnAiRefine" disabled>② AI 转化为可执行方案</button>
+            <div class="push-channels">
+              <label><input type="checkbox" id="chEmail" checked/> 邮件通知</label>
+              <label><input type="checkbox" id="chMsg" checked/> 站内信</label>
+              <label><input type="checkbox" id="chPrinter" checked/> 门店小票机</label>
+            </div>
+            <button type="button" class="btn warn" id="btnDirectPush" disabled>预览并推送</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="pushSubExecutors" style="display:none">
+        <div class="card">
+          <div class="card-hd-row">
+            <div>
+              <h3>推送人员管理</h3>
+              <p class="muted">查看、编辑、删除执行者，并管理门店绑定</p>
+            </div>
+            <button type="button" class="btn" id="btnNewExecutor">新增执行者</button>
+          </div>
+          <div id="executorList"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-tasks" style="display:none">
+      <div class="card hero-lite">
+        <h2>任务管理</h2>
+        <p class="sub">运营闭环第二步：跟踪任务执行进度，回看历史方案沉淀</p>
+      </div>
+
+      <div class="step-nav" id="taskSubNav">
+        <button type="button" class="step-pill active" data-tasksub="tracking">任务跟踪</button>
+        <button type="button" class="step-pill" data-tasksub="solutions">历史方案</button>
+      </div>
+
+      <div id="taskSubTracking">
+        <div class="card"><h3>任务跟踪</h3><div id="taskList"></div></div>
+      </div>
+      <div id="taskSubSolutions" style="display:none">
+        <div class="card"><h3>历史方案</h3><div id="solutionList"></div></div>
+      </div>
+    </section>
+
+    <div class="push-preview-modal" id="pushPreviewModal" style="display:none">
+      <div class="push-preview-panel">
+        <div class="card-hd-row">
+          <h3 style="margin:0">推送前预览</h3>
+          <button type="button" class="btn secondary btn-xs" id="pushPreviewClose">关闭</button>
+        </div>
+        <p class="muted" id="pushPreviewMeta"></p>
+        <p class="muted" id="pushPreviewChannels"></p>
+        <div id="pushPreviewSteps" class="push-preview-checklist"></div>
+        <div id="pushPreviewVerify" class="push-preview-verify"></div>
+        <div class="push-footer-bar" style="border-top:none;padding-top:0">
+          <button type="button" class="btn warn" id="btnConfirmPush">确认推送</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="poster-pick-modal" id="posterPickModal" style="display:none">
+      <div class="poster-pick-panel">
+        <div class="form-row" style="justify-content:space-between">
+          <h3 style="margin:0">选择海报</h3>
+          <button type="button" class="btn secondary" id="posterPickClose">关闭</button>
+        </div>
+        <div id="posterPickList" class="poster-pick-grid"></div>
+      </div>
+    </div>
+
+    <div class="poster-pick-modal" id="taskDetailModal" style="display:none">
+      <div class="poster-pick-panel task-detail-panel">
+        <div class="card-hd-row" style="margin-bottom:12px">
+          <h3 id="taskDetailTitle" style="margin:0">任务详情</h3>
+          <button type="button" class="btn secondary btn-xs" id="taskDetailClose">关闭</button>
+        </div>
+        <div id="taskDetailBody"></div>
+      </div>
+    </div>
+
+    <div class="poster-pick-modal" id="executorFormModal" style="display:none">
+      <div class="poster-pick-panel exec-form-panel">
+        <div class="card-hd-row" style="margin-bottom:14px">
+          <h3 id="executorFormTitle" style="margin:0">新增执行者</h3>
+          <button type="button" class="btn secondary btn-xs" id="executorModalClose">关闭</button>
+        </div>
+        <input type="hidden" id="exEditId" value=""/>
+        <div class="field"><label>姓名</label><input type="text" id="exName" placeholder="如：张三"/></div>
+        <div class="field"><label>邮箱（登录账号）</label><input type="email" id="exEmail" placeholder="如：exec2@fenqun.local"/></div>
+        <div class="field"><label>密码</label><input type="password" id="exPassword" placeholder="新增默认 user123，编辑留空不改"/></div>
+        <div class="field">
+          <label>绑定门店</label>
+          <div id="exStoreChecks" class="store-checks"></div>
+        </div>
+        <div class="form-row" style="margin-top:8px">
+          <button type="button" class="btn" id="btnSaveExecutor">保存</button>
+          <button type="button" class="btn secondary" id="btnCancelExecutor">取消</button>
+        </div>
+      </div>
+    </div>
+
+    </main>
+  </div>
+</div>
+
+<div class="report-viewer" id="reportViewer">
+  <div class="report-panel">
+    <div class="report-panel-hd">
+      <h3 id="reportTitle">报告</h3>
+      <div>
+        <a class="btn secondary" id="reportOpenNew" href="#" target="_blank" style="margin-right:8px">新窗口打开</a>
+        <button class="btn secondary" id="reportClose">关闭</button>
+      </div>
+    </div>
+    <iframe id="reportFrame" title="数据报告"></iframe>
+  </div>
+</div>
+
+<script src="assets/api.js"></script>
+<script src="assets/report-embed.js"></script>
+<script src="assets/reports-config.js"></script>
+<script src="assets/funnel-viz.js"></script>
+<script src="assets/dashboard.js"></script>
+<script src="assets/funnel-ui.js"></script>
+<script src="assets/ai-progress.js"></script>
+<script src="assets/push-strategy.js"></script>
+<script src="assets/perf-diagnosis.js"></script>
+<script src="assets/solutions-store.js"></script>
+<script src="assets/solutions-multi.js"></script>
+<script src="assets/solutions-hub.js"></script>
+<script src="assets/hot-product-agent.js"></script>
+<script src="assets/customer-insight.js"></script>
+<script src="assets/executor-admin.js"></script>
+<script src="assets/topbar.js"></script>
+<script src="assets/ops-page.js"></script>
+</body>
+</html>

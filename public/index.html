@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>分群运营系统 · 登录</title>
+  <link rel="icon" href="assets/logo-icon.png" type="image/png"/>
+  <link rel="stylesheet" href="assets/common.css"/>
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-brand">
+      <img src="assets/logo.png" alt="分群数据" class="brand-logo lg"/>
+    </div>
+    <p class="muted">门店智能诊断 · 方案下发 · 执行闭环</p>
+    <form id="loginForm">
+      <div class="field">
+        <label>邮箱</label>
+        <input type="email" id="email" required placeholder="admin@fenqun.local"/>
+      </div>
+      <div class="field">
+        <label>密码</label>
+        <input type="password" id="password" required placeholder="密码"/>
+      </div>
+      <button type="submit" class="btn" style="width:100%;margin-top:12px">登录</button>
+    </form>
+    <p id="err" style="color:#dc2626;font-size:.88rem;display:none"></p>
+    <div class="role-hint">
+      <div>演示账号 · 一键登录</div>
+      <div class="demo-btns">
+        <button type="button" class="demo-btn" data-role="admin">
+          <strong>超级管理员</strong>
+          <span>admin@fenqun.local</span>
+        </button>
+        <button type="button" class="demo-btn" data-role="ops">
+          <strong>品牌管理员</strong>
+          <span>ops@fenqun.local</span>
+        </button>
+        <button type="button" class="demo-btn" data-role="store">
+          <strong>门店管理员</strong>
+          <span>store@fenqun.local</span>
+        </button>
+        <button type="button" class="demo-btn" data-role="exec">
+          <strong>执行者</strong>
+          <span>exec@fenqun.local</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="assets/api.js"></script>
+<script src="assets/login-page.js"></script>
+</body>
+</html>

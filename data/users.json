@@ -1,0 +1,37 @@
+{
+  "seq": 4,
+  "rows": [
+    {
+      "id": 1,
+      "created_at": "2026-07-03T10:58:22.344Z",
+      "email": "admin@fenqun.local",
+      "password_hash": "$2a$10$LhKvZGpeQUvNNJZYEO8MI.5s08XdvloP/Eah60QwWO7FrnrJ5NsA.",
+      "name": "超级管理员",
+      "role": "super_admin"
+    },
+    {
+      "id": 2,
+      "created_at": "2026-07-03T10:58:22.399Z",
+      "email": "ops@fenqun.local",
+      "password_hash": "$2a$10$d1TnyYJVyxigeI5ZzUHowu3dd7D7dr8AvPXVwenaIRGjDBm0y9CJK",
+      "name": "运营管理者",
+      "role": "ops_manager"
+    },
+    {
+      "id": 3,
+      "created_at": "2026-07-03T10:58:22.456Z",
+      "email": "exec@fenqun.local",
+      "password_hash": "$2a$10$o5k3.fKCY7E9wZtU.m.eNObz9PnY10MIDka74fNy77NCf3fiBCDv.",
+      "name": "门店执行者",
+      "role": "executor"
+    },
+    {
+      "id": 4,
+      "created_at": "2026-08-21T08:46:27.016Z",
+      "email": "store@fenqun.local",
+      "password_hash": "$2a$10$xJTFZAgSt6pCYudPDlHSN.pPcsCt9jxnoW5HY6i3R4m/ETGOeirs.",
+      "name": "门店管理员",
+      "role": "store_manager"
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>超级管理员 · 分群系统</title>
+  <link rel="icon" href="assets/logo-icon.png" type="image/png"/>
+  <link rel="stylesheet" href="assets/common.css"/>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand-block">
+      <a href="/kequn/system/" class="brand-home"><img src="assets/logo.png" alt="分群数据" class="brand-logo"/></a>
+      <h2>系统管理</h2>
+    </div>
+    <p class="muted" id="userName"></p>
+    <nav>
+      <a href="#dashboard" class="active" data-tab="dashboard">总览看板</a>
+      <a href="#stores" data-tab="stores">门店健康</a>
+      <a href="#users" data-tab="users">用户管理</a>
+      <a href="/kequn/system/ops.html" class="nav-external">→ 运营工作台</a>
+    </nav>
+    <button class="btn secondary" style="margin-top:20px;width:100%" id="logoutBtn">退出</button>
+  </aside>
+  <div class="main-area">
+  <main class="main">
+    <div class="hero">
+      <h1>超级管理员</h1>
+      <p>全门店 AI 用量 · 海报统计 · 系统管理</p>
+    </div>
+
+    <section id="tab-dashboard">
+      <div class="kpi-grid" id="kpiGrid"></div>
+      <div class="card">
+        <h3>品牌门店总览</h3>
+        <p class="muted">旗下品牌数、各品牌门店数与门店健康情况</p>
+        <div id="brandDashboard"></div>
+      </div>
+      <div class="card">
+        <h3>AI 调用统计</h3>
+        <table id="aiTable"><thead><tr><th>动作</th><th>次数</th><th>Token估算</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="card">
+        <h3>Demo 资源入口</h3>
+        <div class="demo-grid">
+          <a class="demo-card" href="/fenqun/example1/index.html" target="_blank" style="text-decoration:none;color:inherit">
+            <div class="num">★</div><h4>标杆门店决策看板</h4><p>20+ 交互分析报告</p></a>
+          <a class="demo-card" href="/fenqun/index.html" target="_blank" style="text-decoration:none;color:inherit">
+            <div class="num">8</div><h4>客群价值 Demo</h4><p>8 大业务场景演示</p></a>
+          <a class="demo-card" href="/kequn/system/ops.html" style="text-decoration:none;color:inherit">
+            <div class="num">→</div><h4>运营工作台</h4><p>诊断·方案·任务·海报</p></a>
+        </div>
+      </div>
+      <div class="card">
+        <button class="btn secondary" id="triggerHot">手动触发热点推送（测试）</button>
+        <div class="ai-progress-host" id="hotTriggerProgressHost"></div>
+      </div>
+    </section>
+
+    <section id="tab-stores" style="display:none">
+      <div class="card"><h3>门店健康度（近7天）</h3><div id="storeHealth"></div></div>
+    </section>
+
+    <section id="tab-users" style="display:none">
+      <div class="card">
+        <h3>执行者管理</h3>
+        <p class="muted">超级管理员可对执行者进行增删改查</p>
+        <div class="form-row">
+          <div><label>姓名</label><input type="text" id="admExName"/></div>
+          <div><label>邮箱</label><input type="email" id="admExEmail"/></div>
+          <div><label>密码</label><input type="password" id="admExPass" placeholder="新增必填"/></div>
+          <button class="btn" id="admExSave">保存</button>
+          <button class="btn secondary" id="admExCancel" style="display:none">取消</button>
+        </div>
+        <input type="hidden" id="admExEditId" value=""/>
+        <div id="admExecutorList"></div>
+      </div>
+      <div class="card"><h3>全部用户</h3><div id="userList"></div></div>
+    </section>
+  </main>
+  </div>
+</div>
+<script src="assets/api.js"></script>
+<script src="assets/ai-progress.js"></script>
+<script src="assets/executor-admin.js"></script>
+<script src="assets/topbar.js"></script>
+<script src="assets/admin-page.js"></script>
+</body>
+</html>

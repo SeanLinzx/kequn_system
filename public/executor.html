@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>执行者任务台 · 分群系统</title>
+  <link rel="icon" href="assets/logo-icon.png" type="image/png"/>
+  <link rel="stylesheet" href="assets/common.css"/>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand-block">
+      <a href="/kequn/system/" class="brand-home"><img src="assets/logo.png" alt="分群数据" class="brand-logo"/></a>
+      <h2>执行者任务台</h2>
+    </div>
+    <p class="muted" id="userName"></p>
+    <nav>
+      <a href="#" class="active">我的任务</a>
+    </nav>
+    <button class="btn secondary" style="margin-top:20px;width:100%" id="logoutBtn">退出</button>
+  </aside>
+  <div class="main-area">
+  <main class="main">
+    <div class="hero">
+      <h1>待执行任务</h1>
+      <p>查看任务 · 逐步完成 · 拍照提交</p>
+    </div>
+    <div id="taskContainer"></div>
+  </main>
+  </div>
+</div>
+<script src="assets/api.js"></script>
+<script src="assets/topbar.js"></script>
+<script src="assets/executor-page.js"></script>
+</body>
+</html>
