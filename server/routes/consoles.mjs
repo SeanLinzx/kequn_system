@@ -131,4 +131,21 @@ router.post("/:storeId/update", async (req, res) => {
   res.json({ ok: true, task });
 });
 
+// 删除控制台记录（超管/品牌管理员；门店卸载后残留记录的手动清理）
+router.delete("/:storeId", async (req, res) => {
+  const storeId = req.params.storeId;
+  if (!["super_admin", "ops_manager"].includes(req.user.role)) {
+    return res.status(403).json({ error: "无权限" });
+  }
+  if (!(await canAccessStore(req.user.id, req.user.role, storeId))) {
+    return res.status(403).json({ error: "无权限" });
+  }
+  try {
+    const [result] = await pool.query("DELETE FROM console_deployment WHERE store_id = ?", [storeId]);
+    res.json({ ok: true, removed: result.affectedRows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 export default router;

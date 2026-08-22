@@ -329,6 +329,7 @@ async function loadConsoles() {
             <td>${c.online ? '<span class="tag tag-green">在线</span>' : '<span class="tag tag-gray">离线</span>'}</td>
             <td>
               <button class="btn secondary btn-xs rel-update" data-store-id="${c.storeId}" data-name="${esc(c.storeName)}" ${ut && ut.status === "pending" ? "disabled" : ""}>远程更新</button>
+              <button class="btn warn btn-xs cs-del" data-store-id="${c.storeId}" data-name="${esc(c.storeName)}">删除</button>
               ${c.url ? `<a class="btn" href="${esc(c.url)}" target="_blank" rel="noopener">打开控制台</a>` : ""}
             </td>
           </tr>`;
@@ -339,6 +340,18 @@ async function loadConsoles() {
     });
     document.querySelectorAll(".rel-update").forEach((btn) => {
       btn.onclick = () => openRemoteUpdate(btn.dataset.storeId, btn.dataset.name);
+    });
+    document.querySelectorAll(".cs-del").forEach((btn) => {
+      btn.onclick = async function () {
+        if (!confirm(`确定删除「${btn.dataset.name}」的控制台记录？\n（仅删除总部记录，不影响门店本机；门店重连后会重新上报）`)) return;
+        try {
+          await FenqunAPI.api("/consoles/" + btn.dataset.storeId, { method: "DELETE" });
+          FenqunAPI.toast("控制台记录已删除");
+          loadConsoles();
+        } catch (e) {
+          FenqunAPI.toast(e.message);
+        }
+      };
     });
   } catch (e) {
     document.getElementById("consoleList").innerHTML = `<div class="warn-box">${esc(e.message)}</div>`;
