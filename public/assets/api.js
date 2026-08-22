@@ -1,8 +1,6 @@
 (function () {
-  const API_BASE =
-    location.hostname === "localhost" || location.hostname === "127.0.0.1"
-      ? "http://localhost:3011/api"
-      : "/kequn/system/api";
+  // 前端静态由后端统一托管（express.static(public/)），API 同源 /api
+  const API_BASE = "/api";
 
   function getToken() {
     return localStorage.getItem("fenqun_token");

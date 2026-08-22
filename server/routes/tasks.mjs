@@ -75,7 +75,7 @@ router.post("/:id/photo", requireRole("executor"), upload.single("photo"), (req,
   if (!t || t.assignee_id !== req.user.id) return res.status(403).json({ error: "无权限" });
   if (!req.file) return res.status(400).json({ error: "请上传照片" });
   const urls = JSON.parse(t.photo_urls_json || "[]");
-  const url = `/kequn/system/uploads/${req.file.filename}`;
+  const url = `/uploads/${req.file.filename}`;
   urls.push(url);
   tables.tasks.update(t.id, { photo_urls_json: JSON.stringify(urls) });
   res.json({ ok: true, url, photoUrls: urls });

@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
 
-const SITE_URL = process.env.SITE_URL || "https://creaitor.cn/kequn/system";
+const SITE_URL = process.env.SITE_URL || "https://kequn.fenqunshuju.com";
 
 let transporter = null;
 
