@@ -31,6 +31,7 @@ export function tunnelDiagnostics() {
       storeId: c.storeId,
       wsState: c.ws?.readyState ?? -1, // 0=CONNECTING 1=OPEN 2=CLOSING 3=CLOSED
       isAlive: !!c.ws?.isAlive,
+      token: portTokens.get(port) || null,
     });
   }
   return {

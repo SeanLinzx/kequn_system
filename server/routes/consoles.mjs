@@ -18,6 +18,14 @@ router.get("/", async (req, res) => {
   const { brandId, storeId } = req.query;
   try {
     const isSuperAdmin = req.user.role === "super_admin";
+    // 活跃隧道连接（内存态，权威）：port -> {storeId, token}
+    const activeTunnels = new Map();
+    try {
+      const diag = tunnelDiagnostics();
+      for (const c of diag.connections) {
+        if (c.wsState === 1) activeTunnels.set(Number(c.storeId), { port: c.port, token: c.token });
+      }
+    } catch {}
     const [rows] = await pool.query(
       `SELECT c.id, c.store_id, c.console_id, c.name, c.ip_address, c.port, c.last_seen_at,
               c.tunnel_port, c.tunnel_token, c.tunnel_last_seen,
@@ -52,11 +60,16 @@ router.get("/", async (req, res) => {
     const sshByStore = Object.fromEntries(sshStates);
     res.json({
       consoles: consoles.map((c) => {
+        // 用活跃隧道连接的真实端口/token 覆盖 DB 记录（防止重连后漂移）
+        const active = activeTunnels.get(Number(c.store_id));
+        const activePort = active?.port ?? c.tunnel_port;
+        const activeToken = active?.token ?? c.tunnel_token;
+        const tunnelOnline = active != null;
         const tunnelUrl =
-          c.tunnel_port && c.tunnel_token
+          activePort && activeToken
             ? tunnelViaNginx
-              ? `${tunnelBase}/tunnel/${c.tunnel_port}/t/${c.tunnel_token}/`
-              : `${tunnelBase}:${c.tunnel_port}/t/${c.tunnel_token}/`
+              ? `${tunnelBase}/tunnel/${activePort}/t/${activeToken}/`
+              : `${tunnelBase}:${activePort}/t/${activeToken}/`
             : null;
         const ssh = sshByStore[c.store_id] || { online: false, port: c.ssh_port };
         let updateTask = null;
@@ -76,7 +89,7 @@ router.get("/", async (req, res) => {
           port: c.port,
           url: c.ip_address ? `http://${c.ip_address}:${c.port}` : null,
           tunnelUrl,
-          tunnelOnline: c.tunnel_last_seen != null && now - new Date(c.tunnel_last_seen).getTime() < 120000,
+          tunnelOnline,
           sshPort: c.ssh_port,
           sshOnline: ssh.online,
           updateTask,
