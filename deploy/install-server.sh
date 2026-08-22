@@ -63,10 +63,41 @@ if ! command -v openssl >/dev/null 2>&1; then
   pm_install openssl
 fi
 
+# ---------- Docker：真 Docker CE + compose 插件 ----------
+# 注意：Alibaba Linux / CentOS 预装的是 podman（docker 命令被模拟），compose 是 podman-compose，
+# 与 docker-compose.yml 的 healthcheck 等语法不兼容，必须装真正的 Docker CE。
+NEED_DOCKER=0
 if ! command -v docker >/dev/null 2>&1; then
-  log "安装 Docker + Compose 插件（官方脚本）"
-  curl -fsSL https://get.docker.com | sh
+  NEED_DOCKER=1
+elif docker --version 2>/dev/null | grep -qi "podman"; then
+  log "检测到 docker 命令由 podman 模拟，将安装真正的 Docker CE"
+  NEED_DOCKER=1
+elif ! docker compose version >/dev/null 2>&1; then
+  log "docker compose 插件不可用，将安装 Docker CE + compose 插件"
+  NEED_DOCKER=1
+fi
+
+if [ "$NEED_DOCKER" = "1" ]; then
+  case "$PM" in
+    apt)
+      log "安装 Docker + Compose 插件（官方脚本）"
+      curl -fsSL https://get.docker.com | sh
+      ;;
+    dnf|yum)
+      log "安装 Docker CE + compose 插件（阿里云镜像源）"
+      "$PM" install -y yum-utils
+      # alinux/centos 兼容源：阿里云国内快，失败回退官方
+      if ! "$PM" config-manager --add-repo https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo 2>/dev/null \
+         && ! yum-config-manager --add-repo https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo 2>/dev/null; then
+        "$PM" config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+      fi
+      # alinux $releasever 不是 centos 版本号，强制用 8（alinux3 兼容 el8）
+      sed -i 's|\$releasever|8|g' /etc/yum.repos.d/docker-ce.repo 2>/dev/null || true
+      "$PM" install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+      ;;
+  esac
   systemctl enable --now docker
+  sleep 2
 fi
 docker compose version >/dev/null 2>&1 || die "docker compose 插件不可用，请手动安装 docker-compose-plugin 后重试"
 
