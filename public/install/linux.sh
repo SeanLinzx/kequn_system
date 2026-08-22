@@ -31,13 +31,27 @@ if ! command -v timeout >/dev/null 2>&1; then
   timeout() { "$@"; }
 fi
 
+# 步骤计时器：step_begin <n> <名称> / step_done <n> <名称> —— 每步显示耗时，现场可判断是否正常
+__STEP_T0=""
+step_begin() { # step_begin <编号> <名称>
+  __STEP_T0="$(date +%s)"
+  echo ""
+  echo "━━━ [$1/9] $2 ━━━"
+}
+step_done() { # step_done <编号> <名称>
+  local t1="$(date +%s)"
+  local cost=$(( t1 - __STEP_T0 ))
+  echo "     ✔ $2 完成（${cost}s）"
+}
+step_hint() { echo "     ⏳ $*（正常，请等待）"; }
+
 echo "==> camera-local-console Linux 远程安装"
 echo "    数据服务: $SERVER_URL  通道: $CHANNEL  安装目录: $INSTALL_DIR"
 echo "    全程约 2-5 分钟（含 Node 下载/安装包下载），网络慢时请耐心等待进度条"
 echo ""
 
 # ---------- 1. 识别架构 ----------
-echo "[1/9] 识别架构..."
+step_begin 1 "识别架构"
 ARCH="$(uname -m)"
 case "$ARCH" in
   aarch64|arm64) PLATFORM="linux-arm64" ;;
@@ -45,9 +59,10 @@ case "$ARCH" in
   *) echo "❌ 不支持的架构: $ARCH（仅支持 linux-arm64 / linux-x64）"; exit 1 ;;
 esac
 echo "    架构: $ARCH → 平台包: $PLATFORM"
+step_done 1 "识别架构"
 
 # ---------- 2. 检测/安装 Node.js（控制台运行依赖） ----------
-echo "[2/9] 检测/安装 Node.js..."
+step_begin 2 "检测/安装 Node.js"
 NODE_BIN="$(command -v node 2>/dev/null || echo '')"
 NODE_VER=""
 if [ -n "$NODE_BIN" ]; then NODE_VER="$(node -v 2>/dev/null || echo '')"; fi
@@ -95,9 +110,10 @@ if [ "$need_node_install" = "1" ]; then
 fi
 
 echo "    使用 node: $NODE_BIN"
+step_done 2 "检测/安装 Node.js"
 
 # ---------- 3. 拉取发布通道 manifest ----------
-echo "[3/9] 拉取发布清单..."
+step_begin 3 "拉取发布清单"
 MANIFEST_URL="${SERVER_URL}/releases/camera-local-console/channels/${CHANNEL}.json"
 echo "==> 拉取发布清单: $MANIFEST_URL"
 MANIFEST="$(curl -fsSL "$MANIFEST_URL")"
@@ -115,9 +131,10 @@ if [ -z "$PACKAGE_URL" ] || [ -z "$PACKAGE_SHA" ]; then
   exit 1
 fi
 echo "    版本: ${VERSION:-?}  包: $PACKAGE_URL"
+step_done 3 "拉取发布清单"
 
 # ---------- 4. 下载 + 校验 + 解压 ----------
-echo "[4/9] 下载安装包（进度条见下）..."
+step_begin 4 "下载安装包"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 PKG_FILE="${TMP}/package.tar.gz"
@@ -128,9 +145,10 @@ echo "$PACKAGE_SHA  $PKG_FILE" | sha256sum -c - >/dev/null || { echo "❌ SHA256
 mkdir -p "$INSTALL_DIR"
 echo "==> 解压到 $INSTALL_DIR"
 tar -xzf "$PKG_FILE" -C "$INSTALL_DIR" --strip-components=1
+step_done 4 "下载安装包"
 
 # ---------- 5. 写入配置（serverUrl + token） ----------
-echo "[5/9] 写入配置..."
+step_begin 5 "写入配置"
 CONFIG_DIR="$INSTALL_DIR/data"
 mkdir -p "$CONFIG_DIR"
 if [ -f "$CONFIG_DIR/config.json" ]; then
@@ -153,9 +171,10 @@ fs.writeFileSync(p, JSON.stringify(cfg, null, 2));
   printf '{\n  "server": {\n    "serverUrl": "%s",\n    "siteToken": "%s"\n  }\n}\n' "$SERVER_URL" "$TOKEN" > "$CONFIG_DIR/config.json"
 }
 echo "==> 已写入 serverUrl + token"
+step_done 5 "写入配置"
 
 # ---------- 6. 自动绑定门店（用 token 调 bootstrap） ----------
-echo "[6/9] 自动绑定门店..."
+step_begin 6 "自动绑定门店"
 echo "==> 调 bootstrap 自动绑定门店..."
 BOOTSTRAP="$(curl -fsSL -H "X-Access-Token: $TOKEN" "${SERVER_URL}/api/edge/bootstrap" || echo '')"
 STORE_ID="$(echo "$BOOTSTRAP" | grep -o '"id"[[:space:]]*:[[:space:]]*[0-9]*' | head -1 | sed 's/.*:[[:space:]]*//' || true)"
@@ -172,9 +191,10 @@ fs.writeFileSync(p, JSON.stringify(cfg, null, 2));
 else
   echo "    ⚠️ 未能自动绑定门店（品牌令牌需在控制台首次进入时选择门店）"
 fi
+step_done 6 "自动绑定门店"
 
 # ---------- 7. 注册 systemd 服务 ----------
-echo "[7/9] 注册 systemd 服务..."
+step_begin 7 "注册 systemd 服务"
 # NODE_BIN 已在前面「检测/安装 Node.js」段确定（绝对路径，systemd 需要）
 if [ -z "$NODE_BIN" ] || [ ! -x "$NODE_BIN" ]; then
   echo "❌ 未找到 node，无法启动控制台（前面自动安装失败）"
@@ -203,9 +223,10 @@ systemctl daemon-reload
 systemctl enable camera-local-console
 systemctl restart camera-local-console
 echo "==> systemd 服务已注册并启动: camera-local-console"
+step_done 7 "注册 systemd 服务"
 
 # ---------- 8. SSH 反向隧道（A 方案：Web 终端运维） ----------
-echo "[8/9] 配置 SSH 反向隧道..."
+step_begin 8 "配置 SSH 反向隧道"
 echo "==> 配置 SSH 反向隧道（Web 终端运维）..."
 CONSOLE_ID="$("$NODE_BIN" -e "try{console.log(JSON.parse(require('fs').readFileSync('$CONFIG_DIR/config.json','utf8')).console?.id||'')}catch(e){console.log('')}" 2>/dev/null || echo '')"
 SSH_SETUP="$(curl -fsSL -X POST -H "X-Access-Token: $TOKEN" -H "Content-Type: application/json" -d "{\"consoleId\":\"${CONSOLE_ID}\"}" "${SERVER_URL}/api/edge/ssh-setup" || echo '')"
@@ -280,9 +301,10 @@ EOF
 else
   echo "    ⚠️ SSH 隧道配置跳过（ssh-setup 未返回有效信息，检查网络/令牌）"
 fi
+step_done 8 "配置 SSH 反向隧道"
 
 # ---------- 9. 完成 ----------
-echo "[9/9] 完成"
+step_begin 9 "完成"
 sleep 3
 echo ""
 echo "============================================================"
@@ -292,3 +314,6 @@ echo "    异地访问:  请到 Web 管理面板「控制台」Tab 点击「异�
 echo "    SSH 运维:   管理面板「控制台」Tab → 「SSH 终端」（反向隧道 $([ -n "$SSH_PORT" ] && echo "已启用 :${SSH_PORT}" || echo "未启用")）"
 echo "    门店:      ${STORE_NAME:-（首次进入控制台时确认门店）}"
 echo "============================================================"
+step_done 9 "安装"
+
+exit 0
