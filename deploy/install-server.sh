@@ -29,11 +29,38 @@ die()  { echo -e "\033[1;31m[错误]\033[0m $*" >&2; exit 1; }
 
 log "开始部署：域名=$DOMAIN  仓库=$GIT_URL  分支=$BRANCH"
 
+# ---------- 0. 识别包管理器（支持 Debian/Ubuntu 与 RHEL/CentOS/Rocky/Alibaba 等） ----------
+if command -v apt-get >/dev/null 2>&1; then
+  PM=apt
+elif command -v dnf >/dev/null 2>&1; then
+  PM=dnf
+elif command -v yum >/dev/null 2>&1; then
+  PM=yum
+else
+  die "未识别包管理器（需要 apt-get / dnf / yum 之一）"
+fi
+log "包管理器: $PM"
+
+pm_install() { # pm_install <pkg...>
+  case "$PM" in
+    apt) DEBIAN_FRONTEND=noninteractive apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@" ;;
+    dnf) dnf install -y "$@" ;;
+    yum) yum install -y "$@" ;;
+  esac
+}
+
 # ---------- 1. 系统依赖 ----------
-export DEBIAN_FRONTEND=noninteractive
 if ! command -v curl >/dev/null 2>&1; then
-  log "安装 curl / ca-certificates"
-  apt-get update -qq && apt-get install -y -qq curl ca-certificates
+  log "安装 curl"
+  pm_install curl
+fi
+if ! command -v git >/dev/null 2>&1; then
+  log "安装 git"
+  pm_install git
+fi
+if ! command -v openssl >/dev/null 2>&1; then
+  log "安装 openssl"
+  pm_install openssl
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
@@ -45,14 +72,26 @@ docker compose version >/dev/null 2>&1 || die "docker compose 插件不可用，
 
 if ! command -v nginx >/dev/null 2>&1; then
   log "安装 nginx"
-  apt-get update -qq && apt-get install -y -qq nginx
+  case "$PM" in
+    apt) pm_install nginx ;;
+    dnf) dnf install -y nginx 2>/dev/null || { dnf install -y epel-release && dnf install -y nginx; } ;;
+    yum) yum install -y epel-release && yum install -y nginx ;;
+  esac
 fi
 
 # Node 22（后端 ESM + 边缘 WebSocket 需要）
-if ! command -v node >/dev/null 2>&1 || [ "$(node -v | cut -d. -f1 | tr -d v)" -lt 22 ]; then
+if ! command -v node >/dev/null 2>&1 || [ "$(node -v 2>/dev/null | cut -d. -f1 | tr -d v)" -lt 22 ]; then
   log "安装 Node.js 22（NodeSource）"
-  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-  apt-get install -y -qq nodejs
+  case "$PM" in
+    apt)
+      curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+      pm_install nodejs
+      ;;
+    dnf|yum)
+      curl -fsSL https://rpm.nodesource.com/setup_22.x | bash -
+      "$PM" install -y nodejs
+      ;;
+  esac
 fi
 log "Node: $(node -v)  npm: $(npm -v)"
 
@@ -149,7 +188,12 @@ Match User fenqun-tunnel
     X11Forwarding no
     PasswordAuthentication no
 EOF
-  systemctl restart sshd
+  # Ubuntu 服务名 ssh，RHEL 系服务名 sshd
+  if systemctl list-unit-files 2>/dev/null | grep -q '^ssh\.service'; then
+    systemctl restart ssh
+  else
+    systemctl restart sshd
+  fi
 fi
 
 # ---------- 8. 生成 nginx 配置（证书放置与启用见提示） ----------
