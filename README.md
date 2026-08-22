@@ -43,6 +43,17 @@ PORT=3011 node index.mjs
 
 生产部署通过 nginx 托管 `public/` 静态资源，并将 `/kequn/system/api/` 反向代理到后端端口。
 
+## 服务器一键部署
+
+```bash
+# 在 Ubuntu 22.04 / Debian 12 服务器上（root 或 sudo）
+sudo bash deploy/install-server.sh kequn.fenqunshuju.com https://github.com/SeanLinzx/kequn_system.git main
+```
+
+脚本自动完成：Docker/Compose/nginx/Node 22 安装 → 拉代码 → 生成 .env（强密码）→ 启动 MySQL → 安装依赖 → systemd 注册后端 → 隧道网关用户 → 生成 nginx 配置。证书放置与 nginx 启用按脚本末尾提示手动完成。
+
+**完整操作与验收流程见 `docs/部署与验收清单.md`**（默认账号密码 / SSL 证书手动步骤 / 逐项验收）。
+
 ## 环境变量（可选）
 
 复制 `.env.example` 为 `.env`，可配置：
