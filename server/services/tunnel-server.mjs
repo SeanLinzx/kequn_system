@@ -46,14 +46,18 @@ function parseUrlQuery(url) {
 }
 
 async function handleConnection(ws, req) {
+  const remote = req.socket?.remoteAddress || "?";
   const token = parseUrlQuery(req.url).get("token") || "";
+  console.log(`[tunnel] 新连接 from=${remote} token=${token.slice(0, 8)}...`);
   const [rows] = await pool.query("SELECT * FROM site_token WHERE token = ? AND enabled = 1", [token]);
   const siteToken = rows[0];
   if (!siteToken) {
+    console.log(`[tunnel] 连接被拒: token 无效 from=${remote}`);
     ws.close(4001, "invalid token");
     return;
   }
   if (siteToken.store_id == null) {
+    console.log(`[tunnel] 连接被拒: 品牌 token 无门店 from=${remote}`);
     // 品牌 token 无法确定门店，隧道要求门店 token
     ws.close(4002, "store token required");
     return;
@@ -69,18 +73,25 @@ async function handleConnection(ws, req) {
 
   // upsert console_deployment 隧道字段
   const tunnelToken = randomBytes(12).toString("hex");
-  await pool.query(
-    `INSERT INTO console_deployment (store_id, console_id, name, ip_address, port, tunnel_port, tunnel_token, tunnel_last_seen)
-     VALUES (?, ?, '', '', ?, ?, ?, NOW(3))
-     ON DUPLICATE KEY UPDATE
-       tunnel_port = VALUES(tunnel_port), tunnel_token = VALUES(tunnel_token), tunnel_last_seen = NOW(3)`,
-    [storeId, String(siteToken.id), 3000, tunnelPort, tunnelToken],
-  );
+  try {
+    await pool.query(
+      `INSERT INTO console_deployment (store_id, console_id, name, ip_address, port, tunnel_port, tunnel_token, tunnel_last_seen)
+       VALUES (?, ?, '', '', ?, ?, ?, NOW(3))
+       ON DUPLICATE KEY UPDATE
+         tunnel_port = VALUES(tunnel_port), tunnel_token = VALUES(tunnel_token), tunnel_last_seen = NOW(3)`,
+      [storeId, String(siteToken.id), 3000, tunnelPort, tunnelToken],
+    );
+  } catch (e) {
+    console.error(`[tunnel] upsert 失败 store=${storeId} err=${e.message}`);
+    ws.close(4004, "db error");
+    return;
+  }
 
   connections.set(tunnelPort, { ws, storeId });
   portTokens.set(tunnelPort, tunnelToken);
   ensurePortServer(tunnelPort);
 
+  console.log(`[tunnel] 隧道建立 store=${storeId} port=${tunnelPort} from=${remote}`);
   ws.send(JSON.stringify({ type: "ready", port: tunnelPort, token: tunnelToken }));
   ws.on("message", (data) => handleMessage(tunnelPort, data.toString("utf8")));
   ws.on("close", () => cleanup(tunnelPort, storeId));
