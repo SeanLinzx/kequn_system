@@ -1,12 +1,18 @@
 // 控制台部署列表（管理面板一键跳转门店本地控制台）
 import { Router } from "express";
 import { pool } from "../db-mysql.mjs";
-import { authMiddleware, canAccessStore } from "../auth.mjs";
+import { authMiddleware, canAccessStore, requireRole } from "../auth.mjs";
 import { probeSsh } from "../services/ssh-tunnel.mjs";
 import { getManifest } from "../services/releases.mjs";
+import { tunnelDiagnostics } from "../services/tunnel-server.mjs";
 
 const router = Router();
 router.use(authMiddleware);
+
+// 隧道诊断（仅超管，排查异地访问用）
+router.get("/tunnel-diag", requireRole("super_admin"), (_req, res) => {
+  res.json(tunnelDiagnostics());
+});
 
 router.get("/", async (req, res) => {
   const { brandId, storeId } = req.query;

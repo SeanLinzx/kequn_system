@@ -22,6 +22,24 @@ export function handleTunnelConnection(ws, req) {
   handleConnection(ws, req);
 }
 
+/** 隧道诊断：当前活跃连接与端口服务器（供调试/管理接口用） */
+export function tunnelDiagnostics() {
+  const conns = [];
+  for (const [port, c] of connections) {
+    conns.push({
+      port,
+      storeId: c.storeId,
+      wsState: c.ws?.readyState ?? -1, // 0=CONNECTING 1=OPEN 2=CLOSING 3=CLOSED
+      isAlive: !!c.ws?.isAlive,
+    });
+  }
+  return {
+    connections: conns,
+    portServers: [...portServers.keys()],
+    portTokens: [...portTokens.keys()].map((p) => ({ port: p, hasToken: !!portTokens.get(p) })),
+  };
+}
+
 function parseUrlQuery(url) {
   const q = new URL(url, "http://x");
   return q.searchParams;
