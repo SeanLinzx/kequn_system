@@ -284,7 +284,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=$AUTOSSH_BIN -M 0 -N -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -R 127.0.0.1:${SSH_PORT}:localhost:22 -i ${GATEWAY_KEY} ${GATEWAY_USER}@${SERVER_HOST}
+ExecStart=$AUTOSSH_BIN -M 0 -N -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -R 127.0.0.1:${SSH_PORT}:localhost:22 -i ${GATEWAY_KEY} ${GATEWAY_USER}@${SERVER_HOST}
 Restart=always
 RestartSec=5
 
