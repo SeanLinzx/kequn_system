@@ -146,7 +146,8 @@ function ensurePortServer(tunnelPort) {
       conn.ws.send(JSON.stringify(payload));
     });
   });
-  srv.listen(tunnelPort, "0.0.0.0");
+  // 绑定 127.0.0.1：公网访问由 nginx 同端口 TLS 转发（见 deploy/nginx-kequn.fenqunshuju.com.conf）
+  srv.listen(tunnelPort, "127.0.0.1");
   portServers.set(tunnelPort, srv);
 }
 
