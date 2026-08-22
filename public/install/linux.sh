@@ -26,6 +26,11 @@ fi
 INSTALL_DIR="${INSTALL_DIR:-/opt/camera-local-console}"
 CHANNEL="${CHANNEL:-stable}"
 
+# timeout 兜底：精简系统可能没有 timeout 命令，退化为直接执行
+if ! command -v timeout >/dev/null 2>&1; then
+  timeout() { "$@"; }
+fi
+
 echo "==> camera-local-console Linux 远程安装"
 echo "    数据服务: $SERVER_URL  通道: $CHANNEL  安装目录: $INSTALL_DIR"
 echo "    全程约 2-5 分钟（含 Node 下载/安装包下载），网络慢时请耐心等待进度条"
@@ -211,13 +216,16 @@ GATEWAY_USER="$(echo "$SSH_SETUP" | grep -o '"gatewayUser"[^,]*' | head -1 | sed
 SERVER_HOST="$(echo "$SERVER_URL" | sed -E 's|^https?://([^/:]+).*|\1|')"
 
 if [ -n "$SSH_PORT" ] && [ -n "$SSH_PUBKEY" ] && [ -n "$SERVER_HOST" ]; then
-  # 7.1 安装 autossh（openssh-client 一般自带）
+  # 7.1 安装 autossh（openssh-client 一般自带；超时 + 显示输出，避免 apt 卡死）
   if ! command -v autossh >/dev/null 2>&1; then
-    if command -v apt-get >/dev/null 2>&1; then apt-get update -y >/dev/null 2>&1; apt-get install -y autossh >/dev/null 2>&1 || true
-    elif command -v yum >/dev/null 2>&1; then yum install -y autossh >/dev/null 2>&1 || true
-    elif command -v apk >/dev/null 2>&1; then apk add autossh >/dev/null 2>&1 || true; fi
+    echo "    autossh 未安装，尝试安装（最多 90s）..."
+    if command -v apt-get >/dev/null 2>&1; then
+      timeout 90 apt-get update -y 2>&1 | tail -2 || echo "    ⚠️ apt update 超时/失败（跳过）"
+      timeout 90 apt-get install -y autossh 2>&1 | tail -3 || echo "    ⚠️ autossh 安装失败（可手动安装后重启服务）"
+    elif command -v yum >/dev/null 2>&1; then timeout 90 yum install -y autossh 2>&1 | tail -3 || true
+    elif command -v apk >/dev/null 2>&1; then timeout 90 apk add autossh 2>&1 | tail -3 || true; fi
   fi
-  command -v autossh >/dev/null 2>&1 || echo "    ⚠️ autossh 安装失败（可手动安装后重启服务）"
+  command -v autossh >/dev/null 2>&1 || echo "    ⚠️ autossh 不可用（SSH 隧道将暂不生效，可手动安装 autossh 后重启 camera-local-console-ssh）"
   # 7.2 总部→门店公钥加入 root 的 authorized_keys（Web 终端登录用）
   mkdir -p /root/.ssh && chmod 700 /root/.ssh
   if ! grep -qF "$(echo "$SSH_PUBKEY" | awk '{print $2}')" /root/.ssh/authorized_keys 2>/dev/null; then
@@ -232,14 +240,22 @@ if [ -n "$SSH_PORT" ] && [ -n "$SSH_PUBKEY" ] && [ -n "$SERVER_HOST" ]; then
   fi
   # 7.4 生成门店→总部密钥（autossh 登录总部网关用户）
   GATEWAY_KEY="$INSTALL_DIR/data/tunnel_gateway_key"
-  [ -f "$GATEWAY_KEY" ] || ssh-keygen -t ed25519 -f "$GATEWAY_KEY" -N "" -C "fenqun-${STORE_ID}" >/dev/null
+  if [ ! -f "$GATEWAY_KEY" ]; then
+    echo "    生成隧道密钥..."
+    timeout 30 ssh-keygen -t ed25519 -f "$GATEWAY_KEY" -N "" -C "fenqun-${STORE_ID}" >/dev/null 2>&1 || {
+      echo "    ⚠️ 密钥生成失败（跳过 SSH 隧道）"
+      SSH_PUBKEY=""
+    }
+  fi
   # 7.5 上报门店→总部公钥
   GATEWAY_PUB="$(cat "${GATEWAY_KEY}.pub")"
   curl -fsSL -X POST -H "X-Access-Token: $TOKEN" -H "Content-Type: application/json" \
     -d "{\"publicKey\":\"$(echo "$GATEWAY_PUB" | sed 's/"/\\"/g')\"}" "${SERVER_URL}/api/edge/ssh-pubkey" >/dev/null 2>&1 || true
-  # 7.6 注册 autossh systemd 服务（断线自动重连）
-  SSH_SERVICE="/etc/systemd/system/camera-local-console-ssh.service"
-  cat > "$SSH_SERVICE" <<EOF
+  # 7.6 注册 autossh systemd 服务（断线自动重连；autossh 不可用时跳过，避免坏服务文件）
+  AUTOSSH_BIN="$(command -v autossh 2>/dev/null || echo '')"
+  if [ -n "$AUTOSSH_BIN" ]; then
+    SSH_SERVICE="/etc/systemd/system/camera-local-console-ssh.service"
+    cat > "$SSH_SERVICE" <<EOF
 [Unit]
 Description=Camera Local Console SSH Reverse Tunnel
 After=network-online.target
@@ -247,17 +263,20 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=$(command -v autossh) -M 0 -N -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -R 127.0.0.1:${SSH_PORT}:localhost:22 -i ${GATEWAY_KEY} ${GATEWAY_USER}@${SERVER_HOST}
+ExecStart=$AUTOSSH_BIN -M 0 -N -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -R 127.0.0.1:${SSH_PORT}:localhost:22 -i ${GATEWAY_KEY} ${GATEWAY_USER}@${SERVER_HOST}
 Restart=always
 RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 EOF
-  systemctl daemon-reload
-  systemctl enable camera-local-console-ssh
-  systemctl restart camera-local-console-ssh
-  echo "    ✅ SSH 隧道已配置: ${GATEWAY_USER}@${SERVER_HOST} → 127.0.0.1:${SSH_PORT}（Web 终端使用）"
+    systemctl daemon-reload
+    systemctl enable camera-local-console-ssh
+    systemctl restart camera-local-console-ssh
+    echo "    ✅ SSH 隧道已配置: ${GATEWAY_USER}@${SERVER_HOST} → 127.0.0.1:${SSH_PORT}（Web 终端使用）"
+  else
+    echo "    ⚠️ autossh 未安装，SSH 隧道服务跳过（不影响控制台/异地访问）"
+  fi
 else
   echo "    ⚠️ SSH 隧道配置跳过（ssh-setup 未返回有效信息，检查网络/令牌）"
 fi
