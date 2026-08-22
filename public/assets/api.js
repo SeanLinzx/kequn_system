@@ -60,7 +60,7 @@
   function requireRole(roles, redirect) {
     const user = getUser();
     if (!user || !getToken()) {
-      location.href = "/kequn/system/";
+      location.href = "./index.html";
       return null;
     }
     if (roles && !roles.includes(user.role)) {
@@ -71,10 +71,10 @@
   }
 
   function roleHome(role) {
-    if (role === "super_admin") return "/kequn/system/admin.html";
-    if (role === "ops_manager") return "/kequn/system/ops.html";
-    if (role === "store_manager") return "/kequn/system/ops.html";
-    return "/kequn/system/executor.html";
+    if (role === "super_admin") return "./admin.html";
+    if (role === "ops_manager") return "./ops.html";
+    if (role === "store_manager") return "./ops.html";
+    return "./executor.html";
   }
 
   function toast(msg) {
@@ -135,7 +135,7 @@
     if (btn) {
       btn.onclick = function () {
         clearSession();
-        location.href = "/kequn/system/";
+        location.href = "./index.html";
       };
     }
   }

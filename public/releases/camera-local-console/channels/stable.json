@@ -1,0 +1,9 @@
+{
+  "version": "0.1.0",
+  "channel": "stable",
+  "platform": "linux-arm64",
+  "url": "/releases/camera-local-console/packages/linux-arm64/camera-local-console-linux-arm64-0.1.0.tar.gz",
+  "sha256": "496f4bcc0f18e3802ce8af2bc8c8fe152488919ddd8e63ccb063a01c52507e00",
+  "required": false,
+  "notes": "Linux 源码包（systemd 直跑）"
+}

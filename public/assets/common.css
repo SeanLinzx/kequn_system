@@ -1316,3 +1316,10 @@ input:focus, select:focus, textarea:focus { outline:none; border-color:#93c5fd; 
 .card { transition: box-shadow .18s ease; }
 .card:hover { box-shadow:0 3px 12px rgba(15,23,42,.08); }
 @media (max-width: 768px) { .ci-grid-2 { grid-template-columns:1fr; } }
+
+/* 管理面板：弹窗与表单动作 */
+.modal-mask { position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 900; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.modal-box { background: #fff; border-radius: 12px; padding: 20px; width: 100%; max-width: 640px; box-shadow: 0 10px 40px rgba(15,23,42,.2); }
+.modal-box h3 { margin: 0 0 14px; color: #1e293b; }
+.form-actions { display: flex; gap: 10px; margin-top: 14px; justify-content: flex-end; }
+.copy-input { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .78rem; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; color: #334155; }

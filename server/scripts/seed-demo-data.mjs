@@ -1,0 +1,198 @@
+// 演示数据生成（M4）：为 is_demo=1 的门店生成设备 + 30 天客流/人体数据
+// 数据走真实聚合链路（camera_people_flow / camera_human_body），前端演示门店有内容可看
+// 用法：node scripts/seed-demo-data.mjs [--force]
+import "../load-env.mjs";
+import { pool } from "../db-mysql.mjs";
+import { computeHumanTag } from "../services/tagging.mjs";
+
+const DAYS = 30;
+const FORCE = process.argv.includes("--force");
+
+function hashSeed(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  return h || 1;
+}
+function makeRng(seed) {
+  let s = hashSeed(String(seed));
+  return () => {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    return s / 0x7fffffff;
+  };
+}
+
+const HOUR_PATTERN = [
+  0.02, 0.01, 0.01, 0.01, 0.01, 0.02, 0.05, 0.1, 0.14, 0.1,
+  0.08, 0.11, 0.13, 0.09, 0.07, 0.08, 0.11, 0.16, 0.22, 0.18,
+  0.12, 0.09, 0.06, 0.03,
+];
+
+// 年龄/性别分布（加权）：prime/female、prime/male、young、middle、old、kid、teenager 等
+const BODY_PROFILE = [
+  ["prime", "female", 22], ["prime", "male", 20], ["young", "female", 12],
+  ["young", "male", 10], ["middle", "female", 8], ["middle", "male", 7],
+  ["middleAged", "female", 6], ["middleAged", "male", 5], ["old", "female", 4],
+  ["old", "male", 3], ["kid", "unknown", 2], ["teenager", "unknown", 1],
+];
+
+function pickProfile(rng) {
+  const total = BODY_PROFILE.reduce((s, p) => s + p[2], 0);
+  let r = rng() * total;
+  for (const [age, gender, w] of BODY_PROFILE) {
+    r -= w;
+    if (r <= 0) return { ageGroup: age, gender };
+  }
+  return { ageGroup: "prime", gender: "female" };
+}
+
+function pad(n) { return String(n).padStart(2, "0"); }
+function dateStr(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+function timeStr(d, h) { return `${dateStr(d)} ${pad(h)}:00:00`; }
+
+async function main() {
+  if (FORCE) {
+    const [demoDevices] = await pool.query(
+      "SELECT device_index_code FROM camera_device WHERE device_index_code LIKE 'demo-%'",
+    );
+    if (demoDevices.length) {
+      const codes = demoDevices.map((r) => r.device_index_code);
+      await pool.query(`DELETE FROM camera_people_flow WHERE device_index_code IN (${codes.map(() => "?").join(",")})`, codes);
+      await pool.query(`DELETE FROM camera_human_body WHERE device_index_code IN (${codes.map(() => "?").join(",")})`, codes);
+      await pool.query(`DELETE FROM camera_device WHERE device_index_code LIKE 'demo-%'`);
+      console.log(`force: cleaned ${codes.length} demo devices and their data`);
+    }
+  }
+
+  const [existing] = await pool.query("SELECT COUNT(*) AS c FROM camera_device WHERE device_index_code LIKE 'demo-%'");
+  if (existing[0].c > 0) {
+    console.log("demo data already exists, skip (use --force to regenerate)");
+    await pool.end();
+    return;
+  }
+
+  const [stores] = await pool.query("SELECT id, code, name FROM store WHERE is_demo = 1");
+  console.log(`generating demo data for ${stores.length} stores, ${DAYS} days`);
+
+  const now = new Date();
+  const flowInsert = [];
+  const bodyInsert = [];
+  const deviceUpdates = [];
+
+  for (const store of stores) {
+    const rng = makeRng(store.code + ":demo");
+    const base = 600 + Math.round(rng() * 2000); // 日均过店基数
+    const capture = 0.08 + rng() * 0.1; // 进店率 8%-18%
+    const outside = `demo-${store.code}-outside`;
+    const entrance = `demo-${store.code}-entrance`;
+    const inside = `demo-${store.code}-inside`;
+
+    // 设备（幂等创建）
+    await pool.query(
+      `INSERT IGNORE INTO camera_device (device_index_code, camera_index_code, mac_address, store_id, device_name, ip_address, position_type)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [outside, `cam-${store.code}-out`, `02:${hex2(rng)}:${hex2(rng)}:${hex2(rng)}:${hex2(rng)}:${hex2(rng)}`, store.id, `${store.name}·店外过店`, "10.0.0.1", "OUTSIDE_PASSBY"],
+    );
+    await pool.query(
+      `INSERT IGNORE INTO camera_device (device_index_code, camera_index_code, mac_address, store_id, device_name, ip_address, position_type)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [entrance, `cam-${store.code}-in`, `02:${hex2(rng)}:${hex2(rng)}:${hex2(rng)}:${hex2(rng)}:${hex2(rng)}`, store.id, `${store.name}·门口计数`, "10.0.0.2", "ENTRANCE_COUNTER"],
+    );
+    await pool.query(
+      `INSERT IGNORE INTO camera_device (device_index_code, camera_index_code, mac_address, store_id, device_name, ip_address, position_type)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [inside, `cam-${store.code}-in2`, `02:${hex2(rng)}:${hex2(rng)}:${hex2(rng)}:${hex2(rng)}:${hex2(rng)}`, store.id, `${store.name}·店内人体`, "10.0.0.3", "INSIDE_BODY"],
+    );
+
+    let lastReport = "";
+
+    for (let day = DAYS - 1; day >= 0; day--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - day);
+      const weekday = d.getDay();
+      const isWeekend = weekday === 0 || weekday === 6;
+      const dayFactor = isWeekend ? 1.15 : weekday >= 5 ? 1.05 : 0.95;
+
+      for (let h = 0; h < 24; h++) {
+        const passers = Math.round(base * dayFactor * HOUR_PATTERN[h] * (0.85 + rng() * 0.3));
+        if (passers <= 0) continue;
+        const enters = Math.max(0, Math.round(passers * capture * (0.8 + rng() * 0.4)));
+        const exits = Math.round(enters * 0.95);
+        const ts = timeStr(d, h);
+
+        flowInsert.push([outside, store.id, `cam-${store.code}-out`, ts, 0, 0, passers, 0, "realTime"]);
+        flowInsert.push([entrance, store.id, `cam-${store.code}-in`, ts, enters, exits, 0, 0, "realTime"]);
+        lastReport = ts;
+
+        // 人体画像：店外(过店人群)、门口(进店人群)、店内(店内画像)
+        const humansOutside = Math.max(0, Math.round(passers / 30 + rng() * 4));
+        const humansEntrance = Math.max(0, Math.round(enters / 10 + rng() * 2));
+        const humansInside = Math.max(0, Math.round(enters / 6 + rng() * 2));
+        let humanSeq = 0;
+        const humanBase = `${store.code}-${dateStr(d)}-${h}-`;
+        for (const [dev, n] of [[outside, humansOutside], [entrance, humansEntrance], [inside, humansInside]]) {
+          for (let i = 0; i < n; i++) {
+            const { ageGroup, gender } = pickProfile(rng);
+            const humanId = `${humanBase}${dev.slice(-3)}-${humanSeq++}`;
+            const tag = computeHumanTag({ ageGroup, gender, eventTime: ts, humanId });
+            const minute = Math.floor(rng() * 60);
+            const evt = `${dateStr(d)} ${pad(h)}:${pad(minute)}:00`;
+            bodyInsert.push([
+              dev, store.id, `cam-${store.code}-out`, humanId, evt, ageGroup, gender,
+              Math.floor(rng() * 60), Math.floor(40 + rng() * 55),
+              rng() > 0.7 ? "yes" : "no", rng() > 0.85 ? "yes" : "no", "no",
+              ["black", "blue", "white", "red", "gray"][Math.floor(rng() * 5)],
+              ["shortSleeve", "longSleeve", "jacket"][Math.floor(rng() * 3)],
+              ["blue", "black", "gray", "white"][Math.floor(rng() * 4)],
+              ["trousers", "shorts", "skirt"][Math.floor(rng() * 3)],
+              tag.tagId, tag.ruleVersion,
+            ]);
+          }
+        }
+      }
+    }
+
+    deviceUpdates.push([lastReport, lastReport, outside]);
+    deviceUpdates.push([lastReport, lastReport, entrance]);
+    deviceUpdates.push([lastReport, lastReport, inside]);
+  }
+
+  // 批量插入（每批 1000 行）
+  const FLOW_COLS = "(device_index_code, store_id, camera_index_code, stat_time, enter_count, exit_count, pass_count, duplicate_people, statistical_methods)";
+  const BODY_COLS = "(device_index_code, store_id, camera_index_code, human_id, event_time, age_group, gender, stay_time, similarity, mask, hat, things, jacket_color, jacket_type, pants_color, pants_type, human_tag_id, tag_rule_version)";
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    for (let i = 0; i < flowInsert.length; i += 1000) {
+      const batch = flowInsert.slice(i, i + 1000);
+      await conn.query(`INSERT INTO camera_people_flow ${FLOW_COLS} VALUES ${batch.map(() => "(?,?,?,?,?,?,?,?,?)").join(",")}`, batch.flat());
+    }
+    for (let i = 0; i < bodyInsert.length; i += 1000) {
+      const batch = bodyInsert.slice(i, i + 1000);
+      await conn.query(`INSERT INTO camera_human_body ${BODY_COLS} VALUES ${batch.map(() => "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").join(",")}`, batch.flat());
+    }
+    for (const [reportAt, bodyAt, code] of deviceUpdates) {
+      await conn.query(
+        "UPDATE camera_device SET last_report_at = ?, last_body_event_at = ? WHERE device_index_code = ?",
+        [reportAt, bodyAt, code],
+      );
+    }
+    await conn.commit();
+  } catch (e) {
+    await conn.rollback();
+    throw e;
+  } finally {
+    conn.release();
+  }
+
+  console.log(`done: flow=${flowInsert.length} rows, human_body=${bodyInsert.length} rows`);
+  await pool.end();
+}
+
+function hex2(rng) {
+  return Math.floor(rng() * 256).toString(16).padStart(2, "0");
+}
+
+main().catch((e) => {
+  console.error("seed demo data failed:", e.message);
+  process.exitCode = 1;
+});

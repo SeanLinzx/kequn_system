@@ -192,7 +192,7 @@
       }
       if (e.target.closest("#profileLogout")) {
         FenqunAPI.clearSession();
-        location.href = "/kequn/system/";
+        location.href = "./index.html";
         return;
       }
       if (e.target.closest("#profileCancel")) {

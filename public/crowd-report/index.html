@@ -18,6 +18,17 @@
 </header>
 <main class="page-wrap">
 
+  <div class="card" id="loginGate" style="display:none">
+    <h2>登录后查看报告</h2>
+    <p class="muted">本报告数据来自客群数据系统（真实采集），请使用系统账号登录。</p>
+    <div class="controls">
+      <label>邮箱<input id="loginEmail" placeholder="admin@fenqun.local" style="width:220px"/></label>
+      <label>密码<input id="loginPassword" type="password" placeholder="密码" style="width:180px"/></label>
+      <button class="btn" id="loginBtn">登录</button>
+    </div>
+    <p class="muted" id="loginError" style="color:#dc2626"></p>
+  </div>
+
   <div class="operator-banner">
     <div class="operator-banner-title">本报告直接面向门店 / 区域经营者</div>
     <p>下方<strong>经营决策区块已前置</strong>（关键洞察、错峰排班、行动建议），请优先落实；再向下查看数据图表。</p>
@@ -105,6 +116,7 @@
 
   <div id="fqDataInputPanel"></div>
   </main>
+<script src="../assets/api.js"></script>
 <script src="assets/data-input-panel.js"></script>
 <script>FQ_DATA_INPUT.mount("demo1", document.getElementById("fqDataInputPanel"));</script>
 <script>
@@ -113,19 +125,58 @@ const MODEL = "deepseek-v4-flash";
 const PERSONAS = ["家庭主妇", "退休老人", "中青年", "学生", "上班族"];
 const PERSONA_COLORS = ["#5b8ff9", "#5ad8a6", "#f6bd16", "#e8684a", "#6dc8ec"];
 
-// ---------- CSV 解析 ----------
-function parseCSV(text) {
-  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((l) => l.trim());
-  const header = lines[0].split(",");
-  return lines.slice(1).map((line) => {
-    const cells = line.split(",");
-    const row = {};
-    header.forEach((h, i) => { row[h] = cells[i]; });
-    return row;
-  });
+// ---------- 后端 API 数据（真实聚合） ----------
+let stores = [];
+
+async function loadStoresFromApi() {
+  const data = await FenqunAPI.api("/stores");
+  stores = data.stores || [];
+  const sel = document.getElementById("storeSel");
+  sel.innerHTML = stores.map((s) => `<option value="${s.id}">${s.name}</option>`).join("") || '<option value="">暂无门店</option>';
 }
 
-let trafficRows = [], crowdRows = [];
+function shiftDate(base, delta) {
+  const d = new Date(base + "T00:00:00");
+  d.setDate(d.getDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+
+// 从后端聚合接口构造与旧 computeStats 一致的结构（渲染层不改）
+async function computeStatsFromApi(storeId, storeName, period) {
+  const rangeData = await FenqunAPI.api("/customer/range?storeId=" + encodeURIComponent(storeId));
+  const base = rangeData.range?.hi;
+  if (!base) throw new Error("该门店暂无数据");
+  const start = period === "day" ? base : shiftDate(base, -6);
+  const report = await FenqunAPI.api(
+    `/customer/report?storeId=${encodeURIComponent(storeId)}&start=${start}&end=${base}`,
+  );
+  const nDays = Math.max(1, report.nDays);
+  const hourly = report.hourly.map((h) => {
+    const passers = h.passers / nDays;
+    const enters = h.enters / nDays;
+    return { passers, enters, conv: passers > 0 ? Math.min(enters / passers, 1) : 0 };
+  });
+  const peakHour = hourly.reduce((m, h, i) => (h.passers > hourly[m].passers ? i : m), 0);
+  const enterPeakHour = hourly.reduce((m, h, i) => (h.enters > hourly[m].enters ? i : m), 0);
+  const topPersona = PERSONAS.reduce((m, p) => (report.personaAgg[p].passers > report.personaAgg[m].passers ? p : m), PERSONAS[0]);
+  const dailyDates = report.daily.map((d) => d.d);
+  return {
+    store: storeName, storeId, period, base,
+    dates: period === "day" ? [base] : dailyDates,
+    allDates: period === "day" ? [] : dailyDates,
+    nDays,
+    hourly,
+    daily: report.daily.map((d) => ({ date: d.d, passers: d.passers, enters: d.enters })),
+    personaAgg: report.personaAgg,
+    totalPassers: report.totalPassers,
+    totalEnters: report.totalEnters,
+    conv: report.conv,
+    peakHour,
+    enterPeakHour,
+    topPersona,
+    source: report.source,
+  };
+}
 const charts = {};
 
 function getChart(id) {
@@ -136,55 +187,6 @@ window.addEventListener("resize", () => Object.values(charts).forEach((c) => c.r
 
 const fmt = (n) => Number(n).toLocaleString("zh-CN");
 const pct = (x) => (x * 100).toFixed(1) + "%";
-
-// ---------- 周期筛选 ----------
-function getPeriodDates(store, period) {
-  const dates = [...new Set(trafficRows.filter((r) => r.store === store).map((r) => r.date))].sort();
-  const base = dates[dates.length - 1];
-  return { base, dates: period === "day" ? [base] : dates.slice(-7), allDates: dates };
-}
-
-// 当前周期的统计快照（供渲染与 AI prompt 共用）
-function computeStats(store, period) {
-  const { base, dates, allDates } = getPeriodDates(store, period);
-  const dateSet = new Set(dates);
-  const tRows = trafficRows.filter((r) => r.store === store && dateSet.has(r.date));
-  const cRows = crowdRows.filter((r) => r.store === store && dateSet.has(r.date));
-  const nDays = dates.length;
-
-  // 分时段（多日取日均）
-  const hourly = Array.from({ length: 24 }, () => ({ passers: 0, enters: 0 }));
-  tRows.forEach((r) => {
-    const h = hourly[+r.hour];
-    h.passers += +r.passers; h.enters += +r.enters;
-  });
-  hourly.forEach((h) => { h.passers /= nDays; h.enters /= nDays; h.conv = h.passers > 0 ? Math.min(h.enters / h.passers, 1) : 0; });
-
-  // 按日
-  const dailyMap = {};
-  dates.forEach((d) => { dailyMap[d] = { passers: 0, enters: 0 }; });
-  tRows.forEach((r) => { dailyMap[r.date].passers += +r.passers; dailyMap[r.date].enters += +r.enters; });
-  const daily = dates.map((d) => ({ date: d, ...dailyMap[d] }));
-
-  // 人群
-  const personaAgg = {};
-  PERSONAS.forEach((p) => { personaAgg[p] = { passers: 0, enters: 0, byHour: Array(24).fill(0) }; });
-  cRows.forEach((r) => {
-    const a = personaAgg[r.persona];
-    if (!a) return;
-    a.passers += +r.passers; a.enters += +r.enters; a.byHour[+r.hour] += +r.passers;
-  });
-
-  const totalPassers = tRows.reduce((s, r) => s + +r.passers, 0);
-  const totalEnters = tRows.reduce((s, r) => s + +r.enters, 0);
-  const conv = totalPassers > 0 ? Math.min(totalEnters / totalPassers, 1) : 0;
-
-  const peakHour = hourly.reduce((m, h, i) => (h.passers > hourly[m].passers ? i : m), 0);
-  const enterPeakHour = hourly.reduce((m, h, i) => (h.enters > hourly[m].enters ? i : m), 0);
-  const topPersona = PERSONAS.reduce((m, p) => (personaAgg[p].passers > personaAgg[m].passers ? p : m), PERSONAS[0]);
-
-  return { store, period, base, dates, allDates, nDays, hourly, daily, personaAgg, totalPassers, totalEnters, conv, peakHour, enterPeakHour, topPersona };
-}
 
 // ---------- 洞察 ----------
 function buildInsights(st) {
@@ -231,16 +233,8 @@ function buildInsights(st) {
     const dir = chg >= 0 ? "上升" : "下降";
     out.push({ cls: chg >= 0 ? "good" : "bad", html: `趋势变化：近7个有效日中，后半段日均过店 <b>${fmt(Math.round(secondAvg))}</b> 人，较前半段（${fmt(Math.round(firstAvg))} 人）<b>${dir} ${pct(Math.abs(chg))}</b>。` });
   } else {
-    // 昨日 vs 全周期日均
-    const allDailyAvg = (() => {
-      const set = new Set(st.allDates);
-      let sum = 0;
-      trafficRows.forEach((r) => { if (r.store === st.store && set.has(r.date)) sum += +r.passers; });
-      return sum / st.allDates.length;
-    })();
-    const chg = allDailyAvg > 0 ? (st.totalPassers - allDailyAvg) / allDailyAvg : 0;
-    const dir = chg >= 0 ? "高出" : "低于";
-    out.push({ cls: chg >= 0 ? "good" : "warn", html: `对比基线：昨日过店 <b>${fmt(st.totalPassers)}</b> 人，${dir}该店近 ${st.allDates.length} 个有效营业日的日均水平（${fmt(Math.round(allDailyAvg))} 人）约 <b>${pct(Math.abs(chg))}</b>。` });
+    // 单日周期：无对比基线，直接给当日结论
+    out.push({ cls: "", html: `对比基线：昨日过店 <b>${fmt(st.totalPassers)}</b> 人，进店转化率 <b>${pct(st.conv)}</b>。` });
   }
 
   return out;
@@ -276,15 +270,24 @@ function buildShifts(st) {
 // ---------- 渲染 ----------
 let currentStats = null, currentInsights = [];
 
-function render() {
-  const store = document.getElementById("storeSel").value;
+async function render() {
+  const sel = document.getElementById("storeSel");
+  const storeId = sel.value;
   const period = document.getElementById("periodSel").value;
-  const st = computeStats(store, period);
+  const storeName = sel.options[sel.selectedIndex]?.text || storeId;
+  document.getElementById("dataNote").textContent = "数据加载中…";
+  let st;
+  try {
+    st = await computeStatsFromApi(storeId, storeName, period);
+  } catch (e) {
+    document.getElementById("dataNote").innerHTML = `<span class="error-text">数据加载失败：${e.message}</span>`;
+    return;
+  }
   currentStats = st;
   const isWeek = period === "week";
 
   document.getElementById("dataNote").textContent =
-    `数据截至 ${st.base}（基准日）· 本报告覆盖 ${isWeek ? `${st.dates[0]} ~ ${st.base} 共 ${st.nDays} 个有效营业日` : st.base + " 当日"}`;
+    `数据截至 ${st.base}（基准日）· 本报告覆盖 ${isWeek ? `${st.dates[0]} ~ ${st.base} 共 ${st.nDays} 个有效营业日` : st.base + " 当日"} · 口径：${st.source?.personaNote || ""}`;
 
   // KPI
   const kpis = [
@@ -414,20 +417,40 @@ document.getElementById("aiBtn").addEventListener("click", async () => {
   }
 });
 
-// ---------- 初始化 ----------
+// ---------- 登录门 + 初始化 ----------
+function showLoginGate() {
+  document.getElementById("loginGate").style.display = "block";
+}
+
 async function init() {
+  if (!FenqunAPI.getToken()) { showLoginGate(); return; }
   try {
-    const [tText, cText] = await Promise.all([
-      fetch("data/hourly_traffic.csv").then((r) => { if (!r.ok) throw new Error("hourly_traffic.csv 加载失败"); return r.text(); }),
-      fetch("data/hourly_crowd.csv").then((r) => { if (!r.ok) throw new Error("hourly_crowd.csv 加载失败"); return r.text(); }),
-    ]);
-    trafficRows = parseCSV(tText);
-    crowdRows = parseCSV(cText);
-    render();
+    await loadStoresFromApi();
+    await render();
   } catch (e) {
-    document.getElementById("dataNote").innerHTML = `<span class="error-text">数据加载失败：${e.message}（请通过本地服务访问本页面）</span>`;
+    if (/未登录|401|过期/.test(String(e.message))) {
+      showLoginGate();
+    } else {
+      document.getElementById("dataNote").innerHTML = `<span class="error-text">数据加载失败：${e.message}</span>`;
+    }
   }
 }
+
+document.getElementById("loginBtn").addEventListener("click", async () => {
+  const email = document.getElementById("loginEmail").value.trim();
+  const password = document.getElementById("loginPassword").value;
+  const err = document.getElementById("loginError");
+  try {
+    const data = await FenqunAPI.api("/auth/login", { method: "POST", body: { email, password } });
+    FenqunAPI.setSession(data);
+    err.textContent = "";
+    document.getElementById("loginGate").style.display = "none";
+    await init();
+  } catch (e) {
+    err.textContent = e.message;
+  }
+});
+
 document.getElementById("storeSel").addEventListener("change", render);
 document.getElementById("periodSel").addEventListener("change", render);
 init();

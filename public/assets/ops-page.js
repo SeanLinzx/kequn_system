@@ -4,6 +4,11 @@ document.getElementById("userName").textContent = user.name;
 if (user.role === "super_admin") {
   document.getElementById("backAdmin").style.display = "block";
 }
+// 品牌/门店账号：运营工作台 → 系统管理（令牌/设备/控制台）
+if (user.role === "ops_manager" || user.role === "store_manager") {
+  const consoleLink = document.getElementById("backAdminConsole");
+  if (consoleLink) consoleLink.style.display = "block";
+}
 FenqunAPI.bindLogout();
 
 // 门店管理员：强制单店视角，隐藏「多店对比」与「单店/多店」切换

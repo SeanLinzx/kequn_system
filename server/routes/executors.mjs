@@ -1,7 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { tables, sendMessage } from "../db.mjs";
-import { authMiddleware, canAccessStoreSync, requireRole, getUserStores } from "../auth.mjs";
+import { authMiddleware, canAccessStoreSync, requireRole, getUserStoresLegacy } from "../auth.mjs";
 import { sendEmail, taskPushEmail, siteLink } from "../services/email.mjs";
 import { printTaskToStore } from "../services/printer.mjs";
 import { PUSH_TEMPLATES, PUSH_FACTOR_GROUPS, refinePushPlan, generatePushDecision, getPushInsight, followupPushDecision, followupPushPlan } from "../services/push-plan.mjs";
@@ -11,7 +11,7 @@ router.use(authMiddleware);
 router.use(requireRole("super_admin", "ops_manager"));
 
 function accessibleStoreIds(user) {
-  return getUserStores(user.id, user.role).map((s) => s.id);
+  return getUserStoresLegacy(user.id, user.role).map((s) => s.id);
 }
 
 function executorBindings(executorId) {
@@ -75,7 +75,7 @@ router.get("/", (req, res) => {
   if (storeId) {
     executors = executors.filter((e) => e.bindings.some((b) => b.storeId === storeId));
   }
-  res.json({ executors, stores: getUserStores(req.user.id, req.user.role) });
+  res.json({ executors, stores: getUserStoresLegacy(req.user.id, req.user.role) });
 });
 
 router.get("/templates/list", (_req, res) => {

@@ -15,3 +15,7 @@ public/uploads/
 # 系统文件
 .DS_Store
 *.log
+
+# 本地 SSH 密钥与授权文件（生产由安装脚本/后端运行时生成）
+server/data/ssh-keys/
+server/data/authorized_keys

@@ -98,15 +98,17 @@ export function initDb() {
 }
 
 export function seedDb() {
+  // 与 MySQL seed（sql/seed.mjs）保持一致：生产只有 demo + test 两个品牌/门店
   const stores = [
-    { id: "dadao-yintan", name: "长沙望城银杉路零食店", location: "长沙市望城区银杉路", is_real: 1, brand: "大道合" },
-    { id: "mock-xiangjiang", name: "长沙湘江路零食店（模拟）", location: "长沙市天心区湘江中路", is_real: 0, brand: "大道合" },
-    { id: "mock-meixi", name: "长沙梅溪湖零食店（模拟·待评估）", location: "长沙市岳麓区梅溪湖路", is_real: 0, brand: "大道合" },
-    { id: "mock-lingdu-wuyi", name: "长沙五一广场零食店（模拟）", location: "长沙市五一广场", is_real: 0, brand: "零度严选" },
-    { id: "mock-lingdu-nanzhan", name: "长沙高铁南站零食店（模拟）", location: "长沙市高铁南站", is_real: 0, brand: "零度严选" },
-    { id: "mock-guomeijia-daxue", name: "长沙岳麓大学城零食店（模拟）", location: "长沙市岳麓大学城", is_real: 0, brand: "果美佳" },
+    { id: "demo-store", name: "演示门店", location: "演示地址", is_real: 1, brand: "演示品牌" },
+    { id: "test-store", name: "测试门店", location: "测试地址", is_real: 1, brand: "测试品牌" },
   ];
   const defaultPrinter = process.env.YLY_DEFAULT_MACHINE_CODE || "4004904861";
+  const seedIds = new Set(stores.map((s) => s.id));
+  // 清理不在 seed 列表中的历史门店（旧 mock 数据）
+  for (const existing of tables.stores.all()) {
+    if (!seedIds.has(existing.id)) tables.stores.remove(existing.id);
+  }
   for (const s of stores) {
     const existing = tables.stores.all().find((x) => x.id === s.id);
     if (!existing) {
@@ -148,16 +150,19 @@ export function seedDb() {
       tables.user_stores.insert({ user_id: userId, store_id: storeId });
     }
   }
+  // 清理指向已删除门店的历史绑定
+  for (const b of tables.user_stores.all()) {
+    if (!tables.stores.get(b.store_id)) tables.user_stores.remove(b.id);
+  }
   if (userIds["ops@fenqun.local"]) {
-    bind(userIds["ops@fenqun.local"], "dadao-yintan");
-    bind(userIds["ops@fenqun.local"], "mock-xiangjiang");
-    bind(userIds["ops@fenqun.local"], "mock-meixi");
+    bind(userIds["ops@fenqun.local"], "demo-store");
+    bind(userIds["ops@fenqun.local"], "test-store");
   }
   if (userIds["store@fenqun.local"]) {
-    bind(userIds["store@fenqun.local"], "dadao-yintan");
+    bind(userIds["store@fenqun.local"], "demo-store");
   }
   if (userIds["exec@fenqun.local"]) {
-    bind(userIds["exec@fenqun.local"], "dadao-yintan");
+    bind(userIds["exec@fenqun.local"], "demo-store");
   }
 }
 

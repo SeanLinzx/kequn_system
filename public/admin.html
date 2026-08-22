@@ -3,33 +3,40 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>超级管理员 · 分群系统</title>
+  <title>系统管理 · 分群系统</title>
   <link rel="icon" href="assets/logo-icon.png" type="image/png"/>
   <link rel="stylesheet" href="assets/common.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css"/>
 </head>
 <body>
 <div class="app-shell">
   <aside class="sidebar">
     <div class="sidebar-brand-block">
-      <a href="/kequn/system/" class="brand-home"><img src="assets/logo.png" alt="分群数据" class="brand-logo"/></a>
+      <a href="./" class="brand-home"><img src="assets/logo.png" alt="分群数据" class="brand-logo"/></a>
       <h2>系统管理</h2>
     </div>
     <p class="muted" id="userName"></p>
     <nav>
       <a href="#dashboard" class="active" data-tab="dashboard">总览看板</a>
-      <a href="#stores" data-tab="stores">门店健康</a>
+      <a href="#stores" data-tab="stores">门店管理</a>
+      <a href="#devices" data-tab="devices">设备管理</a>
+      <a href="#consoles" data-tab="consoles">控制台</a>
+      <a href="#brands" data-tab="brands">品牌管理</a>
+      <a href="#tokens" data-tab="tokens">接入令牌</a>
+      <a href="#releases" data-tab="releases">发布管理</a>
       <a href="#users" data-tab="users">用户管理</a>
-      <a href="/kequn/system/ops.html" class="nav-external">→ 运营工作台</a>
+      <a href="./ops.html" class="nav-external">→ 运营工作台</a>
     </nav>
     <button class="btn secondary" style="margin-top:20px;width:100%" id="logoutBtn">退出</button>
   </aside>
   <div class="main-area">
   <main class="main">
     <div class="hero">
-      <h1>超级管理员</h1>
-      <p>全门店 AI 用量 · 海报统计 · 系统管理</p>
+      <h1>系统管理</h1>
+      <p id="pageSub">品牌 · 门店 · 摄像头设备 · 接入令牌 · 本地控制台</p>
     </div>
 
+    <!-- ============ 总览看板（超管） ============ -->
     <section id="tab-dashboard">
       <div class="kpi-grid" id="kpiGrid"></div>
       <div class="card">
@@ -42,26 +49,110 @@
         <table id="aiTable"><thead><tr><th>动作</th><th>次数</th><th>Token估算</th></tr></thead><tbody></tbody></table>
       </div>
       <div class="card">
-        <h3>Demo 资源入口</h3>
-        <div class="demo-grid">
-          <a class="demo-card" href="/fenqun/example1/index.html" target="_blank" style="text-decoration:none;color:inherit">
-            <div class="num">★</div><h4>标杆门店决策看板</h4><p>20+ 交互分析报告</p></a>
-          <a class="demo-card" href="/fenqun/index.html" target="_blank" style="text-decoration:none;color:inherit">
-            <div class="num">8</div><h4>客群价值 Demo</h4><p>8 大业务场景演示</p></a>
-          <a class="demo-card" href="/kequn/system/ops.html" style="text-decoration:none;color:inherit">
-            <div class="num">→</div><h4>运营工作台</h4><p>诊断·方案·任务·海报</p></a>
-        </div>
-      </div>
-      <div class="card">
         <button class="btn secondary" id="triggerHot">手动触发热点推送（测试）</button>
         <div class="ai-progress-host" id="hotTriggerProgressHost"></div>
       </div>
     </section>
 
+    <!-- ============ 门店管理 ============ -->
     <section id="tab-stores" style="display:none">
-      <div class="card"><h3>门店健康度（近7天）</h3><div id="storeHealth"></div></div>
+      <div class="card" id="storeCreateCard">
+        <h3>新建门店</h3>
+        <div class="form-row">
+          <div><label>门店名称 *</label><input type="text" id="stName" placeholder="长沙XX零食店"/></div>
+          <div><label>品牌</label><select id="stBrand"></select></div>
+          <div><label>地址</label><input type="text" id="stLocation" placeholder="长沙市…"/></div>
+          <div><label>营业时间</label><input type="text" id="stHours" placeholder="08:00-23:00"/></div>
+          <button class="btn" id="stSave">创建门店</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>门店列表</h3>
+        <div class="form-row" id="stFilterRow" style="display:none">
+          <div><label>按品牌过滤</label><select id="stFilterBrand"><option value="">全部品牌</option></select></div>
+        </div>
+        <div id="storeList"></div>
+      </div>
     </section>
 
+    <!-- ============ 设备管理（只显示 + 过滤） ============ -->
+    <section id="tab-devices" style="display:none">
+      <div class="card">
+        <h3>设备列表</h3>
+        <p class="muted">设备由边缘控制台（camera-local-console）注册，此处只读；可按品牌/门店过滤。</p>
+        <div class="form-row">
+          <div><label>按品牌过滤</label><select id="dvFilterBrand"><option value="">全部品牌</option></select></div>
+          <div><label>按门店过滤</label><select id="dvFilterStore"><option value="">全部门店</option></select></div>
+        </div>
+        <div id="deviceList"></div>
+      </div>
+    </section>
+
+    <!-- ============ 控制台（只显示 + 过滤） ============ -->
+    <section id="tab-consoles" style="display:none">
+      <div class="card">
+        <h3>门店本地控制台</h3>
+        <p class="muted">门店员工在门店 Wi-Fi / 同一子网下访问 camera-local-console（默认 http://IP:3000）。点击「打开」直接进入该店控制台。</p>
+        <div class="form-row">
+          <div><label>按品牌过滤</label><select id="csFilterBrand"><option value="">全部品牌</option></select></div>
+          <div><label>按门店过滤</label><select id="csFilterStore"><option value="">全部门店</option></select></div>
+        </div>
+        <div id="consoleList"></div>
+      </div>
+    </section>
+
+    <!-- ============ 品牌管理 ============ -->
+    <section id="tab-brands" style="display:none">
+      <div class="card" id="brandCreateCard">
+        <h3>新建品牌</h3>
+        <div class="form-row">
+          <div><label>品牌编码 *</label><input type="text" id="brCode" placeholder="dadao-he"/></div>
+          <div><label>品牌名称 *</label><input type="text" id="brName" placeholder="大道合"/></div>
+          <button class="btn" id="brSave">创建品牌</button>
+        </div>
+      </div>
+      <div class="card"><h3>品牌列表</h3><div id="brandList"></div></div>
+    </section>
+
+    <!-- ============ 接入令牌（只显示） ============ -->
+    <section id="tab-tokens" style="display:none">
+      <div class="card">
+        <h3>接入令牌</h3>
+        <p class="muted">令牌在创建品牌/门店时自动生成（一实体一 token），写入边缘控制台「数据上报」页；此处只读。</p>
+        <div id="tokenList"></div>
+      </div>
+    </section>
+
+    <!-- ============ 发布管理（超管） ============ -->
+    <section id="tab-releases" style="display:none">
+      <div class="card">
+        <h3>发布通道</h3>
+        <p class="muted">用户下载页与边缘控制台检查更新读取这里的通道版本；安装脚本从 stable 通道拉包。</p>
+        <div id="releaseChannels"></div>
+      </div>
+      <div class="card">
+        <h3>上传安装包</h3>
+        <p class="muted">同版本同平台只允许一个包；已发布版本需先撤回通道再覆盖；zip 包内 version.json 必须与填写版本一致。</p>
+        <div class="form-row">
+          <div><label>安装包</label><input type="file" id="relFile" accept=".zip,.gz,.tar,.tgz"/></div>
+          <div><label>版本号 *</label><input type="text" id="relVersion" placeholder="0.2.0"/></div>
+          <div><label>平台</label>
+            <select id="relPlatform">
+              <option value="win-x64">Windows x64</option>
+              <option value="linux-arm64">Linux ARM64</option>
+              <option value="linux-x64">Linux x64</option>
+            </select>
+          </div>
+          <div><label>更新说明</label><input type="text" id="relNotes" placeholder="本次修复/新增"/></div>
+          <button class="btn" id="relUpload">上传并生成清单</button>
+        </div>
+        <p class="muted" id="relStatus"></p>
+      </div>
+      <div class="card"><h3>已导入安装包</h3><div id="releasePackages"></div></div>
+      <div class="card"><h3>发布历史</h3><pre id="releaseHistory" class="copy-input" style="white-space:pre-wrap;max-height:200px;overflow:auto"></pre></div>
+    </section>
+
+    <!-- ============ 用户管理（超管） ============ -->
     <section id="tab-users" style="display:none">
       <div class="card">
         <h3>执行者管理</h3>
@@ -81,10 +172,41 @@
   </main>
   </div>
 </div>
+
+<!-- 远程更新弹窗 -->
+<div class="modal-mask" id="relUpdateModal" style="display:none">
+  <div class="modal-box" style="max-width:560px">
+    <h3 id="relUpdateTitle">远程更新控制台</h3>
+    <div class="form-row">
+      <div><label>目标门店</label><input id="relUpdateStore" readonly/></div>
+      <div><label>目标版本</label><select id="relUpdateVersion"></select></div>
+    </div>
+    <p class="muted" id="relUpdateHint">控制台将自动下载安装包、SHA256 校验、替换并重启，全程无需现场操作；更新状态显示在控制台列表。</p>
+    <div class="form-actions">
+      <button class="btn" id="relUpdateGo">下发更新</button>
+      <button class="btn secondary" id="relUpdateCancel">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- SSH 终端弹窗 -->
+<div class="modal-mask" id="sshModal" style="display:none">
+  <div class="modal-box" style="max-width:880px">
+    <h3 id="sshTitle">SSH 终端</h3>
+    <div id="sshTerm" style="height:460px;background:#1e1e1e;border-radius:8px;overflow:hidden"></div>
+    <p class="muted" id="sshStatus" style="margin-top:8px">正在连接…</p>
+    <div class="form-actions">
+      <button class="btn secondary" id="sshClose">关闭</button>
+    </div>
+  </div>
+</div>
+
 <script src="assets/api.js"></script>
 <script src="assets/ai-progress.js"></script>
 <script src="assets/executor-admin.js"></script>
 <script src="assets/topbar.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
 <script src="assets/admin-page.js"></script>
 </body>
 </html>

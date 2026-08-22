@@ -180,7 +180,13 @@ export function diagnose(storeId, start, end) {
 }
 
 export function storeHealth(storeId) {
-  const funnel = loadFunnel(storeId);
+  let funnel;
+  try {
+    funnel = loadFunnel(storeId);
+  } catch {
+    // 无漏斗数据（真实门店尚未接入客流）：健康状态视为"无数据"，不中断
+    return { storeId, health: "gray", worstFactor: null, summary: "无数据" };
+  }
   const end = funnel.hi;
   const startDate = new Date(end);
   startDate.setDate(startDate.getDate() - 6);
