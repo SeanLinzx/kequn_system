@@ -318,4 +318,18 @@ router.post("/update-result", async (req, res) => {
   }
 });
 
+// 门店卸载清理：删除该门店的 console_deployment 记录（控制台卸载时调用）
+router.post("/uninstall", async (req, res) => {
+  const siteToken = req.siteToken;
+  if (siteToken.store_id == null) return res.status(400).json({ error: "需要门店令牌" });
+  try {
+    const [result] = await pool.query("DELETE FROM console_deployment WHERE store_id = ?", [siteToken.store_id]);
+    // 顺带清理该门店令牌的安装短码（避免复用）
+    await pool.query("UPDATE site_token SET install_code = NULL, install_code_expires_at = NULL WHERE store_id = ?", [siteToken.store_id]);
+    res.json({ ok: true, removed: result.affectedRows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 export default router;

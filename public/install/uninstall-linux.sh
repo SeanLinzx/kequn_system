@@ -28,6 +28,25 @@ SSH_SVC="camera-local-console-ssh"
 echo "==> camera-local-console 卸载"
 echo "    安装目录: $INSTALL_DIR  保留数据: $([ "$KEEP_DATA" = 1 ] && echo 是 || echo 否)"
 
+# ---------- 0. 通知总部清除门店记录（在删目录前读取配置） ----------
+CONFIG_FILE="$INSTALL_DIR/data/config.json"
+if [ -f "$CONFIG_FILE" ]; then
+  SITE_TOKEN="$(grep -o '"siteToken"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" | head -1 | sed 's/.*"siteToken"[[:space:]]*:[[:space:]]*"//;s/"$//' || true)"
+  SERVER_URL="$(grep -o '"serverUrl"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" | head -1 | sed 's/.*"serverUrl"[[:space:]]*:[[:space:]]*"//;s/"$//' || true)"
+  if [ -n "$SITE_TOKEN" ] && [ -n "$SERVER_URL" ]; then
+    echo "==> 通知总部清除门店记录..."
+    SERVER_URL="${SERVER_URL%/}"
+    RESULT="$(curl -fsSL --connect-timeout 10 --max-time 15 -X POST -H "X-Access-Token: $SITE_TOKEN" -H "Content-Type: application/json" "${SERVER_URL}/api/edge/uninstall" 2>/dev/null || echo '')"
+    if echo "$RESULT" | grep -q '"ok"'; then
+      echo "    ✅ 总部已清除该门店的控制台记录"
+    else
+      echo "    ⚠️ 通知总部失败（可能网络问题，管理面板可手动删除控制台记录）"
+    fi
+  else
+    echo "    ⚠️ 未找到门店配置（token/serverUrl），跳过总部清理"
+  fi
+fi
+
 # ---------- 1. 停止并禁用服务 ----------
 echo "==> 停止并禁用服务..."
 for svc in "$SSH_SVC" "$CONSOLE_SVC"; do
