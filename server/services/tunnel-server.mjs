@@ -137,8 +137,11 @@ function ensurePortServer(tunnelPort) {
         return;
       }
       const target = req.url.slice(m[0].length - 1) || "/";
+      // nginx /tunnel/<port>/ 前缀代理：302 跳转需带上前缀，否则会被 nginx 的 location / 抢走
+      const prefix = req.headers["x-forwarded-prefix"] || "";
+      const location = prefix ? `${prefix}${target}` : target;
       res.writeHead(302, {
-        Location: target,
+        Location: location,
         "Set-Cookie": `tunnel_cred=${tunnelToken}; Path=/; HttpOnly; SameSite=Lax`,
         "Cache-Control": "no-store",
       });
