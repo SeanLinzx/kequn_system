@@ -30,6 +30,13 @@ export async function runSchema() {
   try {
     await raw.query("SET NAMES utf8mb4");
     await raw.query(schema);
+    // 增量迁移：旧库补充新列（ALTER 重复列会报错，忽略即可）
+    const migrations = [
+      "ALTER TABLE sys_user ADD COLUMN must_change_password TINYINT NOT NULL DEFAULT 0 AFTER role",
+    ];
+    for (const sql of migrations) {
+      try { await raw.query(sql); } catch {}
+    }
   } finally {
     await raw.end();
   }

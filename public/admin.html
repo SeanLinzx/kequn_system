@@ -152,11 +152,26 @@
       <div class="card"><h3>发布历史</h3><pre id="releaseHistory" class="copy-input" style="white-space:pre-wrap;max-height:200px;overflow:auto"></pre></div>
     </section>
 
-    <!-- ============ 用户管理（超管） ============ -->
+    <!-- ============ 用户管理（超管 / 品牌管理员） ============ -->
     <section id="tab-users" style="display:none">
       <div class="card">
-        <h3>执行者管理</h3>
-        <p class="muted">超级管理员可对执行者进行增删改查</p>
+        <h3>系统用户管理</h3>
+        <p class="muted" id="admUserHint">创建用户后使用默认密码登录，首次登录将强制修改密码</p>
+        <div class="form-row">
+          <div><label>姓名</label><input type="text" id="admUserName"/></div>
+          <div><label>邮箱</label><input type="email" id="admUserEmail"/></div>
+          <div><label>角色</label><select id="admUserRole"></select></div>
+          <div><label>绑定门店（多选）</label><select id="admUserStores" multiple style="min-height:72px"></select></div>
+          <button class="btn" id="admUserSave">创建用户</button>
+          <button class="btn secondary" id="admUserCancel" style="display:none">取消</button>
+        </div>
+        <input type="hidden" id="admUserEditId" value=""/>
+        <p class="muted" id="admUserPwdHint" style="display:none;color:#1d4ed8;font-weight:600"></p>
+        <div id="admUserList"></div>
+      </div>
+      <div class="card">
+        <h3>执行者管理（演示模块）</h3>
+        <p class="muted">旧版执行者管理（JSON 演示数据），与上方系统用户独立</p>
         <div class="form-row">
           <div><label>姓名</label><input type="text" id="admExName"/></div>
           <div><label>邮箱</label><input type="email" id="admExEmail"/></div>
@@ -167,7 +182,6 @@
         <input type="hidden" id="admExEditId" value=""/>
         <div id="admExecutorList"></div>
       </div>
-      <div class="card"><h3>全部用户</h3><div id="userList"></div></div>
     </section>
   </main>
   </div>

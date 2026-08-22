@@ -19,7 +19,7 @@ document.getElementById("pageSub").textContent =
 const ALL_TABS = ["dashboard", "stores", "devices", "consoles", "brands", "tokens", "releases", "users"];
 const ROLE_TABS = {
   super_admin: ALL_TABS,
-  ops_manager: ["stores", "devices", "consoles", "brands", "tokens"],
+  ops_manager: ["stores", "devices", "consoles", "brands", "tokens", "users"],
   store_manager: ["stores", "devices", "consoles", "tokens"],
 };
 const ACTIVE_TABS = ROLE_TABS[ROLE];
@@ -437,16 +437,162 @@ document.getElementById("admExCancel").onclick = function () {
   document.getElementById("admExCancel").style.display = "none";
 };
 
-async function loadUsers() {
-  const data = await FenqunAPI.api("/admin/users");
-  document.getElementById("userList").innerHTML = data.users
-    .map(function (u) {
-      const stores = data.bindings.filter((b) => b.user_id === u.id).map((b) => b.store_id).join(", ");
-      return `<div class="solution-item"><h4>${esc(u.name)}</h4>
-        <p>${esc(u.email)} · <span class="tag tag-blue">${esc(u.role)}</span></p>
-        <p class="muted">门店：${esc(stores || "全部")}</p></div>`;
-    })
+// ============ 系统用户管理（超管 / 品牌管理员） ============
+let userRoleOptions = [];
+let userStoreOptions = [];
+
+async function initUserMgmt() {
+  const meta = await FenqunAPI.api("/users/meta/roles");
+  userRoleOptions = meta.roles || [];
+  const roleSel = document.getElementById("admUserRole");
+  roleSel.innerHTML = userRoleOptions
+    .map((r) => `<option value="${r}">${esc(ROLE_LABEL(r))}</option>`)
     .join("");
+  await refreshUserStores();
+  await loadUsers();
+  document.getElementById("admUserSave").onclick = saveUser;
+  document.getElementById("admUserCancel").onclick = resetUserForm;
+}
+
+function ROLE_LABEL(r) {
+  return { super_admin: "超级管理员", ops_manager: "品牌管理员", store_manager: "门店管理员", executor: "执行者" }[r] || r;
+}
+
+async function refreshUserStores() {
+  const stores = await FenqunAPI.api("/stores?all=1");
+  const list = stores.stores || stores || [];
+  const sel = document.getElementById("admUserStores");
+  sel.innerHTML = list
+    .map((s) => `<option value="${s.id}">${esc(s.brand_name || s.name)} · ${esc(s.name)}</option>`)
+    .join("");
+  userStoreOptions = list;
+}
+
+async function loadUsers() {
+  const data = await FenqunAPI.api("/users");
+  const users = data.users || [];
+  const listEl = document.getElementById("admUserList");
+  if (!users.length) {
+    listEl.innerHTML = "<p class='muted'>暂无用户</p>";
+    return;
+  }
+  listEl.innerHTML = `<div class="table-wrap"><table class="exec-table">
+    <thead><tr><th>姓名</th><th>邮箱</th><th>角色</th><th>绑定门店</th><th>状态</th><th>操作</th></tr></thead>
+    <tbody>${users.map(renderUserRow).join("")}</tbody></table></div>`;
+  document.querySelectorAll(".adm-user-edit").forEach(function (btn) {
+    btn.onclick = function () { editUser(Number(btn.dataset.id)); };
+  });
+  document.querySelectorAll(".adm-user-reset").forEach(function (btn) {
+    btn.onclick = function () { resetUserPwd(Number(btn.dataset.id)); };
+  });
+  document.querySelectorAll(".adm-user-del").forEach(function (btn) {
+    btn.onclick = function () { deleteUser(Number(btn.dataset.id)); };
+  });
+}
+
+function renderUserRow(u) {
+  const stores = (u.bindings || []).map((b) => b.storeName).join("、") || "—";
+  const status = u.must_change_password
+    ? '<span class="tag tag-yellow">待改密</span>'
+    : '<span class="tag tag-green">正常</span>';
+  const role = ROLE_LABEL(u.role);
+  return `<tr class="executor-row">
+    <td><strong>${esc(u.name)}</strong></td>
+    <td>${esc(u.email)}</td>
+    <td><span class="tag tag-blue">${esc(role)}</span></td>
+    <td class="muted">${esc(stores)}</td>
+    <td>${status}</td>
+    <td class="exec-actions">
+      <button type="button" class="btn secondary btn-xs adm-user-edit" data-id="${u.id}">编辑</button>
+      <button type="button" class="btn warn btn-xs adm-user-reset" data-id="${u.id}">重置密码</button>
+      <button type="button" class="btn warn btn-xs adm-user-del" data-id="${u.id}">删除</button>
+    </td>
+  </tr>`;
+}
+
+function resetUserForm() {
+  document.getElementById("admUserEditId").value = "";
+  document.getElementById("admUserName").value = "";
+  document.getElementById("admUserEmail").value = "";
+  document.getElementById("admUserRole").selectedIndex = 0;
+  Array.from(document.querySelectorAll("#admUserStores option")).forEach((o) => (o.selected = false));
+  document.getElementById("admUserPwdHint").style.display = "none";
+  document.getElementById("admUserSave").textContent = "创建用户";
+  document.getElementById("admUserCancel").style.display = "none";
+}
+
+function editUser(id) {
+  FenqunAPI.api("/users").then(function (data) {
+    const u = (data.users || []).find((x) => x.id === id);
+    if (!u) return;
+    document.getElementById("admUserEditId").value = id;
+    document.getElementById("admUserName").value = u.name;
+    document.getElementById("admUserEmail").value = u.email;
+    const roleSel = document.getElementById("admUserRole");
+    // 编辑时保留原角色（仅当角色在可选项内才允许改）
+    if (userRoleOptions.includes(u.role)) {
+      roleSel.value = u.role;
+    } else {
+      roleSel.innerHTML = `<option value="${u.role}">${esc(ROLE_LABEL(u.role))}</option>`;
+    }
+    Array.from(document.querySelectorAll("#admUserStores option")).forEach((o) => {
+      o.selected = (u.bindings || []).some((b) => String(b.storeId) === o.value);
+    });
+    document.getElementById("admUserSave").textContent = "保存修改";
+    document.getElementById("admUserCancel").style.display = "inline-block";
+  });
+}
+
+async function saveUser() {
+  const id = document.getElementById("admUserEditId").value;
+  const body = {
+    name: document.getElementById("admUserName").value.trim(),
+    email: document.getElementById("admUserEmail").value.trim(),
+    role: document.getElementById("admUserRole").value,
+    storeIds: Array.from(document.querySelectorAll("#admUserStores option"))
+      .filter((o) => o.selected)
+      .map((o) => Number(o.value)),
+  };
+  try {
+    const data = await FenqunAPI.api(id ? "/users/" + id : "/users", {
+      method: id ? "PUT" : "POST",
+      body,
+    });
+    if (!id && data.defaultPassword) {
+      const hint = document.getElementById("admUserPwdHint");
+      hint.textContent = `已创建 ${body.email}，默认密码：${data.defaultPassword}（首次登录强制修改）`;
+      hint.style.display = "block";
+    }
+    FenqunAPI.toast(id ? "用户已更新" : "用户已创建");
+    resetUserForm();
+    await loadUsers();
+  } catch (e) {
+    FenqunAPI.toast(e.message);
+  }
+}
+
+async function resetUserPwd(id) {
+  if (!confirm("确认将该用户密码重置为默认密码？用户下次登录将强制修改密码。")) return;
+  try {
+    const data = await FenqunAPI.api("/users/" + id + "/reset-password", { method: "POST" });
+    const hint = document.getElementById("admUserPwdHint");
+    hint.textContent = `已重置 ${data.email} 的密码，默认密码：${data.defaultPassword}（下次登录强制修改）`;
+    hint.style.display = "block";
+    await loadUsers();
+  } catch (e) {
+    FenqunAPI.toast(e.message);
+  }
+}
+
+async function deleteUser(id) {
+  if (!confirm("确认删除该用户？此操作不可恢复。")) return;
+  try {
+    await FenqunAPI.api("/users/" + id, { method: "DELETE" });
+    FenqunAPI.toast("用户已删除");
+    await loadUsers();
+  } catch (e) {
+    FenqunAPI.toast(e.message);
+  }
 }
 
 const hotTriggerProg = FQ_AI.createProgressController(document.getElementById("hotTriggerProgressHost"));
@@ -468,8 +614,13 @@ document.getElementById("triggerHot").onclick = async function () {
 // ============ 初始化 ============
 if (isSuper) {
   loadStats();
-  loadUsers();
   loadExecutorsAdmin();
+}
+// 超管与品牌管理员都可管理系统用户
+if (isSuper || isOps) {
+  initUserMgmt().catch(function (e) {
+    FenqunAPI.toast(e.message);
+  });
 }
 // 默认激活角色第一个可用 Tab
 const firstTabEl = document.querySelector(`.sidebar nav a[data-tab="${activeTab}"]`);

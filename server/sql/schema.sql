@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS sys_user (
   password_hash VARCHAR(100) NOT NULL,
   name          VARCHAR(50)  NOT NULL,
   role          VARCHAR(30)  NOT NULL,
+  must_change_password TINYINT NOT NULL DEFAULT 0,  -- 1=首次登录强制修改密码
   created_at    DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

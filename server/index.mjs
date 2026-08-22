@@ -28,6 +28,7 @@ import siteTokenRoutes from "./routes/site-tokens.mjs";
 import edgeRoutes from "./routes/edge.mjs";
 import consoleRoutes from "./routes/consoles.mjs";
 import releaseRoutes from "./routes/releases.mjs";
+import userRoutes from "./routes/users.mjs";
 import { ensureLayout } from "./services/releases.mjs";
 const PUBLIC_DIR = join(__dirname, "..", "public");
 const UPLOAD_DIR = join(PUBLIC_DIR, "uploads");
@@ -85,6 +86,7 @@ app.use("/api/site-tokens", siteTokenRoutes);
 app.use("/api/consoles", consoleRoutes);
 app.use("/api/edge", edgeRoutes);
 app.use("/api/releases", releaseRoutes);
+app.use("/api/users", userRoutes);
 
 // Ark image proxy for poster generation
 app.use("/api/v3", (req, res) => {

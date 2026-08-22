@@ -75,7 +75,10 @@ async function doLogin(email, password) {
     });
     saveAccount(email, password);
     FenqunAPI.setSession(data);
-    location.href = FenqunAPI.roleHome(data.user.role);
+    // 首次登录强制修改密码（新建/被重置账号）
+    location.href = data.user.must_change_password
+      ? "./change-password.html"
+      : FenqunAPI.roleHome(data.user.role);
   } catch (ex) {
     errEl.textContent = ex.message;
     errEl.style.display = "block";

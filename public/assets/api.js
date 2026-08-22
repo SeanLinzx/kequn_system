@@ -67,6 +67,10 @@
       location.href = redirect || roleHome(user.role);
       return null;
     }
+    if (user.must_change_password) {
+      location.href = "./change-password.html";
+      return null;
+    }
     return user;
   }
 

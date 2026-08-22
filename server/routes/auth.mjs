@@ -16,7 +16,13 @@ router.post("/login", async (req, res) => {
   const stores = await getUserStores(user.id, user.role);
   res.json({
     token: signToken(user),
-    user: { id: user.id, email: user.email, name: user.name, role: user.role },
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      must_change_password: user.must_change_password === 1,
+    },
     stores,
   });
 });
@@ -31,7 +37,14 @@ router.get("/me", async (req, res) => {
     const user = users[0];
     if (!user) return res.status(401).json({ error: "用户不存在" });
     res.json({
-      user: { id: user.id, email: user.email, name: user.name, role: user.role, created_at: user.created_at },
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        must_change_password: user.must_change_password === 1,
+        created_at: user.created_at,
+      },
       stores: await getUserStores(user.id, user.role),
     });
   } catch {
@@ -73,9 +86,20 @@ router.put("/me", authMiddleware, async (req, res) => {
 
   const [updatedRows] = await pool.query("SELECT * FROM sys_user WHERE id = ?", [user.id]);
   const updated = updatedRows[0];
+  // 修改密码成功后清除强制改密标记
+  if (newPassword && updated.must_change_password === 1) {
+    await pool.query("UPDATE sys_user SET must_change_password = 0 WHERE id = ?", [user.id]);
+    updated.must_change_password = 0;
+  }
   res.json({
     token: signToken(updated),
-    user: { id: updated.id, email: updated.email, name: updated.name, role: updated.role },
+    user: {
+      id: updated.id,
+      email: updated.email,
+      name: updated.name,
+      role: updated.role,
+      must_change_password: updated.must_change_password === 1,
+    },
     stores: await getUserStores(updated.id, updated.role),
   });
 });
