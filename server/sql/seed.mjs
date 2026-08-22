@@ -51,8 +51,9 @@ export async function seedIfEmpty(conn) {
     const brandIdByCode = Object.fromEntries(brands.map((b) => [b.code, b.id]));
     for (const s of DEMO_STORES) {
       const [result] = await conn.query(
-        "INSERT INTO store (code, name, brand_id, location, business_hours, is_demo) VALUES (?, ?, ?, ?, ?, 1)",
-        [s.code, s.name, brandIdByCode[s.brand] ?? null, s.location, s.hours],
+        "INSERT INTO store (code, name, brand_id, location, business_hours, is_demo) VALUES (?, ?, ?, ?, ?, ?)",
+        // 仅「演示品牌」门店标记 is_demo=1（演示数据脚本只给 demo 品牌生成假数据）
+        [s.code, s.name, brandIdByCode[s.brand] ?? null, s.location, s.hours, s.brand === "demo" ? 1 : 0],
       );
       await conn.query("INSERT INTO site_token (token, name, store_id) VALUES (?, ?, ?)", [
         newToken(), `${s.name}门店令牌`, result.insertId,

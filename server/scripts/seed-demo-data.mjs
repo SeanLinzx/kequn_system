@@ -1,9 +1,16 @@
-// 演示数据生成（M4）：为 is_demo=1 的门店生成设备 + 30 天客流/人体数据
-// 数据走真实聚合链路（camera_people_flow / camera_human_body），前端演示门店有内容可看
+// 演示数据生成（M4）：为「演示品牌（demo）」的门店生成设备 + 30 天客流/人体数据
+// 数据走真实聚合链路（camera_people_flow / camera_human_body），前端演示门店有内容可看；
+// 同时生成旧版业绩诊断用的 data/stores/<code>/funnel.json（demo 品牌门店专属，test/真实品牌不生成）
 // 用法：node scripts/seed-demo-data.mjs [--force]
 import "../load-env.mjs";
 import { pool } from "../db-mysql.mjs";
 import { computeHumanTag } from "../services/tagging.mjs";
+import { mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const STORES_DATA_DIR = join(__dirname, "..", "..", "data", "stores");
 
 const DAYS = 30;
 const FORCE = process.argv.includes("--force");
@@ -70,8 +77,13 @@ async function main() {
     return;
   }
 
-  const [stores] = await pool.query("SELECT id, code, name FROM store WHERE is_demo = 1");
-  console.log(`generating demo data for ${stores.length} stores, ${DAYS} days`);
+  // 只给「演示品牌（demo）」的门店生成假数据；test 及未来真实品牌保持干净
+  const [stores] = await pool.query(
+    `SELECT s.id, s.code, s.name FROM store s
+     JOIN brand b ON b.id = s.brand_id
+     WHERE b.code = 'demo'`,
+  );
+  console.log(`generating demo data for ${stores.length} stores (brand=demo), ${DAYS} days`);
 
   const now = new Date();
   const flowInsert = [];
@@ -182,6 +194,62 @@ async function main() {
     throw e;
   } finally {
     conn.release();
+  }
+
+  // 旧版业绩诊断 JSON 漏斗文件（demo 品牌门店专属；test/真实品牌不生成）
+  for (const store of stores) {
+    const [rows] = await pool.query(
+      `SELECT DATE(f.stat_time) AS d, DAYOFWEEK(f.stat_time) AS wd, SUM(f.pass_count) AS p, SUM(f.enter_count) AS e
+       FROM camera_people_flow f
+       JOIN camera_device dev ON dev.device_index_code = f.device_index_code
+       WHERE f.store_id = ? AND dev.position_type = 'OUTSIDE_PASSBY'
+       GROUP BY DATE(f.stat_time)`,
+      [store.id],
+    );
+    if (!rows.length) continue;
+    const days = rows
+      .sort((a, b) => (a.d > b.d ? 1 : -1))
+      .map((r) => {
+        const e = Number(r.e || 0);
+        const o = Math.round(e * 0.62);
+        return {
+          d: r.d instanceof Date ? r.d.toISOString().slice(0, 10) : String(r.d).slice(0, 10),
+          wd: (Number(r.wd) + 6) % 7, // MySQL DAYOFWEEK(1=周日) → JS(0=周日)
+          we: Number(r.wd) === 1 || Number(r.wd) === 7 ? 1 : 0,
+          w: "晴",
+          p: Number(r.p || 0),
+          e,
+          o,
+          s: +(o * 19).toFixed(1),
+        };
+      });
+    const sumP = days.reduce((s, d) => s + d.p, 0);
+    const sumE = days.reduce((s, d) => s + d.e, 0);
+    const sumO = days.reduce((s, d) => s + d.o, 0);
+    const sumS = days.reduce((s, d) => s + d.s, 0);
+    const funnel = {
+      meta: { id: store.code, name: store.name, isReal: false, location: "演示门店地址" },
+      base: {
+        capture: sumP ? sumE / sumP : 0,
+        conv: sumE ? sumO / sumE : 0,
+        aov: sumO ? sumS / sumO : 0,
+        rev_per_pass: sumP ? sumS / sumP : 0,
+      },
+      days,
+      daybuckets: [],
+      dayhours: [],
+      lo: days[0]?.d,
+      hi: days[days.length - 1]?.d,
+    };
+    const dir = join(STORES_DATA_DIR, store.code);
+    const funnelPath = join(dir, "funnel.json");
+    if (FORCE || !existsSync(funnelPath)) {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(funnelPath, JSON.stringify(funnel, null, 2), "utf8");
+      console.log(`funnel.json 生成: ${store.code}（${days.length} 天，业绩诊断可看）`);
+    } else {
+      console.log(`funnel.json 已存在（跳过）: ${store.code}`);
+    }
   }
 
   console.log(`done: flow=${flowInsert.length} rows, human_body=${bodyInsert.length} rows`);

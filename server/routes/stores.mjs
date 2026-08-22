@@ -27,6 +27,18 @@ const router = Router();
 router.use(authMiddleware);
 
 /**
+ * 数据缺失统一降级：旧 JSON 漏斗演示数据不存在时返回 200 空态（前端 warn-box 渲染），
+ * 而非 400 刷错误。真实客群数据走 /api/customer/*（MySQL）。
+ */
+function respondEmptyOrError(res, e) {
+  const msg = String(e?.message || e || "");
+  if (msg.includes("门店数据不存在") || msg.includes("无数据") || msg.includes("未找到") || msg.includes("CSV")) {
+    return res.json({ empty: true, message: msg, stores: [], users: [], data: null });
+  }
+  res.status(400).json({ error: msg });
+}
+
+/**
  * 解析门店（MySQL）：权限校验 + 返回门店行（含 code）。
  * 失败时已写响应并返回 null。
  */
@@ -176,7 +188,7 @@ router.get("/:storeId/meta", async (req, res) => {
       promo,
     });
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    respondEmptyOrError(res, e);
   }
 });
 
@@ -188,7 +200,7 @@ router.post("/:storeId/diagnose", async (req, res) => {
   try {
     res.json(diagnose(store.code, start, end));
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    respondEmptyOrError(res, e);
   }
 });
 
@@ -198,7 +210,7 @@ router.get("/:storeId/dashboard", async (req, res) => {
   try {
     res.json(getStoreDashboard(store.code));
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    respondEmptyOrError(res, e);
   }
 });
 
@@ -220,7 +232,7 @@ router.put("/:storeId/printer", requireRole("super_admin", "ops_manager", "store
     const code = setStorePrinterCode(store.code, req.body?.machineCode);
     res.json({ ok: true, storeId: store.id, machineCode: code });
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    respondEmptyOrError(res, e);
   }
 });
 
@@ -241,7 +253,7 @@ router.get("/:storeId/health", async (req, res) => {
   try {
     res.json(storeHealth(store.code));
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    respondEmptyOrError(res, e);
   }
 });
 
@@ -251,7 +263,7 @@ router.get("/:storeId/targets", async (req, res) => {
   try {
     res.json({ storeId: store.id, targets: getTargets(store.code) });
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    respondEmptyOrError(res, e);
   }
 });
 
@@ -263,7 +275,7 @@ router.put("/:storeId/targets", requireRole("super_admin", "ops_manager", "store
     const targets = setTarget(store.code, periodType, value, req.user.id);
     res.json({ storeId: store.id, targets });
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    respondEmptyOrError(res, e);
   }
 });
 
@@ -273,7 +285,7 @@ router.get("/:storeId/margin-cost", async (req, res) => {
   try {
     res.json(getMarginCost(store.code, req.query.start, req.query.end));
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    respondEmptyOrError(res, e);
   }
 });
 
@@ -282,7 +294,7 @@ router.get("/compare", async (req, res) => {
   try {
     res.json(buildStoreCompareRows(stores.map((s) => s.code)));
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    respondEmptyOrError(res, e);
   }
 });
 
@@ -291,7 +303,7 @@ router.get("/transformation-compare", async (req, res) => {
   try {
     res.json(compareTransformation(stores.map((s) => s.code)));
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    respondEmptyOrError(res, e);
   }
 });
 
@@ -300,7 +312,7 @@ router.get("/closure-compare", async (req, res) => {
   try {
     res.json(compareClosure(stores.map((s) => s.code)));
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    respondEmptyOrError(res, e);
   }
 });
 
@@ -310,7 +322,7 @@ router.get("/:storeId/transformation-advice", async (req, res) => {
   try {
     res.json(getTransformationAdvice(store.code));
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    respondEmptyOrError(res, e);
   }
 });
 
@@ -320,7 +332,7 @@ router.get("/:storeId/closure-assessment", async (req, res) => {
   try {
     res.json(getClosureAssessment(store.code));
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    respondEmptyOrError(res, e);
   }
 });
 
@@ -338,7 +350,7 @@ router.post("/:storeId/diagnosis-report", requireRole("super_admin", "ops_manage
     });
     res.json(report);
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    respondEmptyOrError(res, e);
   }
 });
 
@@ -398,7 +410,7 @@ router.post("/:storeId/report-subscription/send-now", requireRole("super_admin",
     const sent = results.some((r) => r.ok);
     res.json({ ok: true, sent, results });
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    respondEmptyOrError(res, e);
   }
 });
 
