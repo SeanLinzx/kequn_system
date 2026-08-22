@@ -73,6 +73,13 @@ async function main() {
   const [existing] = await pool.query("SELECT COUNT(*) AS c FROM camera_device WHERE device_index_code LIKE 'demo-%'");
   if (existing[0].c > 0) {
     console.log("demo data already exists, skip (use --force to regenerate)");
+    // 数据已存在时也补生成业绩诊断 funnel.json（幂等）
+    const [stores] = await pool.query(
+      `SELECT s.id, s.code, s.name FROM store s
+       JOIN brand b ON b.id = s.brand_id
+       WHERE b.code = 'demo'`,
+    );
+    await writeFunnelFiles(stores);
     await pool.end();
     return;
   }
@@ -197,6 +204,14 @@ async function main() {
   }
 
   // 旧版业绩诊断 JSON 漏斗文件（demo 品牌门店专属；test/真实品牌不生成）
+  await writeFunnelFiles(stores);
+
+  console.log(`done: flow=${flowInsert.length} rows, human_body=${bodyInsert.length} rows`);
+  await pool.end();
+}
+
+/** 从 MySQL 客流数据聚合生成业绩诊断用的 data/stores/<code>/funnel.json（幂等） */
+async function writeFunnelFiles(stores) {
   for (const store of stores) {
     const [rows] = await pool.query(
       `SELECT DATE(f.stat_time) AS d, DAYOFWEEK(MIN(f.stat_time)) AS wd, SUM(f.pass_count) AS p, SUM(f.enter_count) AS e
@@ -251,9 +266,6 @@ async function main() {
       console.log(`funnel.json 已存在（跳过）: ${store.code}`);
     }
   }
-
-  console.log(`done: flow=${flowInsert.length} rows, human_body=${bodyInsert.length} rows`);
-  await pool.end();
 }
 
 function hex2(rng) {
