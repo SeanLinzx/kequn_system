@@ -180,6 +180,8 @@ if [ ! -f "$APP_DIR/.env" ]; then
   sed -i "s|^MYSQL_PASSWORD=.*|MYSQL_PASSWORD=${MYSQL_PWD}|" .env
   sed -i "s|^MYSQL_ROOT_PASSWORD=.*|MYSQL_ROOT_PASSWORD=${MYSQL_ROOT}|" .env
   sed -i "s|^TUNNEL_PUBLIC_URL=.*|TUNNEL_PUBLIC_URL=https://${DOMAIN}|" .env
+  sed -i "s|^TUNNEL_VIA_NGINX=.*|TUNNEL_VIA_NGINX=1|" .env
+  grep -q "^TUNNEL_VIA_NGINX=" .env || echo "TUNNEL_VIA_NGINX=1" >> .env
 else
   log ".env 已存在，跳过生成（如需重置请删除 $APP_DIR/.env 后重跑）"
 fi

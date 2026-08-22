@@ -34,8 +34,11 @@ router.get("/", async (req, res) => {
       consoles = visible;
     }
     if (brandId) consoles = consoles.filter((c) => String(c.brand_id) === String(brandId));
-    // 隧道异地访问 URL：http://<本机IP>:<tunnel_port>/t/<tunnel_token>/
+    // 隧道异地访问 URL：
+    //   生产（TUNNEL_VIA_NGINX=1）：https://<域名>/tunnel/<port>/t/<token>/  ← nginx 443 统一入口，无需开隧道端口防火墙
+    //   本地/直连：http://<host>:<port>/t/<token>/
     const tunnelBase = process.env.TUNNEL_PUBLIC_URL || `http://${req.hostname || "127.0.0.1"}`;
+    const tunnelViaNginx = process.env.TUNNEL_VIA_NGINX === "1";
     // SSH 隧道在线探测（仅对有 ssh_port 的行）
     const sshStates = await Promise.all(
       consoles.filter((c) => c.ssh_port != null).map(async (c) => [c.store_id, await probeSsh(c.store_id)]),
@@ -45,7 +48,9 @@ router.get("/", async (req, res) => {
       consoles: consoles.map((c) => {
         const tunnelUrl =
           c.tunnel_port && c.tunnel_token
-            ? `${tunnelBase}:${c.tunnel_port}/t/${c.tunnel_token}/`
+            ? tunnelViaNginx
+              ? `${tunnelBase}/tunnel/${c.tunnel_port}/t/${c.tunnel_token}/`
+              : `${tunnelBase}:${c.tunnel_port}/t/${c.tunnel_token}/`
             : null;
         const ssh = sshByStore[c.store_id] || { online: false, port: c.ssh_port };
         let updateTask = null;
