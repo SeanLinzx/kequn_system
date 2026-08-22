@@ -17,36 +17,23 @@
     <form id="loginForm">
       <div class="field">
         <label>邮箱</label>
-        <input type="email" id="email" required placeholder="admin@fenqun.local"/>
+        <input type="email" id="email" list="savedAccounts" required placeholder="admin@fenqun.local" autocomplete="username"/>
+        <datalist id="savedAccounts"></datalist>
       </div>
       <div class="field">
         <label>密码</label>
-        <input type="password" id="password" required placeholder="密码"/>
+        <input type="password" id="password" required placeholder="密码" autocomplete="current-password"/>
+      </div>
+      <div class="login-options">
+        <label class="remember-row">
+          <input type="checkbox" id="rememberPwd" checked/>
+          <span>记住账号和密码</span>
+        </label>
+        <button type="button" class="btn-link" id="clearSaved" style="display:none">清除记录</button>
       </div>
       <button type="submit" class="btn" style="width:100%;margin-top:12px">登录</button>
     </form>
     <p id="err" style="color:#dc2626;font-size:.88rem;display:none"></p>
-    <div class="role-hint">
-      <div>演示账号 · 一键登录</div>
-      <div class="demo-btns">
-        <button type="button" class="demo-btn" data-role="admin">
-          <strong>超级管理员</strong>
-          <span>admin@fenqun.local</span>
-        </button>
-        <button type="button" class="demo-btn" data-role="ops">
-          <strong>品牌管理员</strong>
-          <span>ops@fenqun.local</span>
-        </button>
-        <button type="button" class="demo-btn" data-role="store">
-          <strong>门店管理员</strong>
-          <span>store@fenqun.local</span>
-        </button>
-        <button type="button" class="demo-btn" data-role="exec">
-          <strong>执行者</strong>
-          <span>exec@fenqun.local</span>
-        </button>
-      </div>
-    </div>
   </div>
 </div>
 <script src="assets/api.js"></script>

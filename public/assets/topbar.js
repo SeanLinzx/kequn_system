@@ -161,6 +161,18 @@
     try {
       const data = await FenqunAPI.api("/auth/me", { method: "PUT", body });
       FenqunAPI.updateSession(data);
+      // 修改密码成功后，同步更新登录页记住的账号密码（若已保存）
+      if (neu) {
+        try {
+          const SAVED_KEY = "fenqun_saved_accounts";
+          const saved = JSON.parse(localStorage.getItem(SAVED_KEY) || "[]");
+          const idx = saved.findIndex((s) => s.email === data.user.email);
+          if (idx >= 0) {
+            saved[idx].password = neu;
+            localStorage.setItem(SAVED_KEY, JSON.stringify(saved));
+          }
+        } catch {}
+      }
       FenqunAPI.toast("资料已保存");
       const sidebarName = document.getElementById("userName");
       if (sidebarName) sidebarName.textContent = data.user.name;
