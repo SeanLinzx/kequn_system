@@ -70,27 +70,27 @@ need_node_install=0
 if [ -z "$NODE_VER" ]; then
   need_node_install=1
 else
-  # 版本号如 v20.19.0 → 主版本 20
+  # 版本号如 v22.14.0 → 主版本 22（控制台隧道客户端需要 Node >= 22 的全局 WebSocket）
   NODE_MAJOR="$(echo "$NODE_VER" | sed 's/^v//;s/\..*//')"
-  [ "${NODE_MAJOR:-0}" -lt 20 ] && need_node_install=1
+  [ "${NODE_MAJOR:-0}" -lt 22 ] && need_node_install=1
 fi
 
 if [ "$need_node_install" = "1" ]; then
-  echo "==> 检测到 Node 缺失或版本过低（$NODE_VER），自动安装 Node.js 20..."
+  echo "==> 检测到 Node 缺失或版本过低（$NODE_VER），自动安装 Node.js 22（隧道需要 ≥22）..."
   case "$PLATFORM" in
     linux-arm64)
-      NODE_TARBALL="node-v20.19.0-linux-arm64"
+      NODE_TARBALL="node-v22.14.0-linux-arm64"
       ;;
     linux-x64)
-      NODE_TARBALL="node-v20.19.0-linux-x64"
+      NODE_TARBALL="node-v22.14.0-linux-x64"
       ;;
   esac
   NODE_DIST="/usr/local/lib/nodejs"
   if [ ! -x "$NODE_DIST/$NODE_TARBALL/bin/node" ]; then
-    echo "==> 下载 Node.js 20（$PLATFORM，约 25MB）..."
+    echo "==> 下载 Node.js 22（$PLATFORM，约 30MB）..."
     mkdir -p "$NODE_DIST" /tmp/node-install
     # 依次尝试官方源与国内镜像（--progress-bar 显示进度；--max-time 防无限卡住）
-    for base in "https://nodejs.org/dist/v20.19.0" "https://npmmirror.com/mirrors/node/v20.19.0"; do
+    for base in "https://nodejs.org/dist/v22.14.0" "https://npmmirror.com/mirrors/node/v22.14.0"; do
       echo "    下载源: $base"
       if curl -fsSL --connect-timeout 15 --max-time 600 --progress-bar -o "/tmp/node-install/$NODE_TARBALL.tar.xz" "$base/$NODE_TARBALL.tar.xz"; then
         break
