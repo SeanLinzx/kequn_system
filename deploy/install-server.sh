@@ -85,6 +85,11 @@ if [ "$NEED_DOCKER" = "1" ]; then
       ;;
     dnf|yum)
       log "安装 Docker CE + compose 插件（阿里云镜像源）"
+      # 移除 podman 的 docker 模拟（/usr/bin/docker 符号链接，避免与 docker-ce 文件冲突）
+      if "$PM" list installed podman-docker >/dev/null 2>&1; then
+        log "移除 podman-docker（其 /usr/bin/docker 与 docker-ce 冲突）"
+        "$PM" remove -y podman-docker
+      fi
       "$PM" install -y yum-utils
       # alinux/centos 兼容源：阿里云国内快，失败回退官方
       if ! "$PM" config-manager --add-repo https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo 2>/dev/null \
