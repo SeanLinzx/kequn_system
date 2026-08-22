@@ -85,8 +85,11 @@ if [ "$NEED_DOCKER" = "1" ]; then
       ;;
     dnf|yum)
       log "安装 Docker CE + compose 插件（阿里云镜像源）"
-      # 移除 podman 的 docker 模拟（/usr/bin/docker 符号链接，避免与 docker-ce 文件冲突）
-      if "$PM" list installed podman-docker >/dev/null 2>&1; then
+      # 移除 podman 全家（/usr/bin/docker 符号链接 + 与 docker-ce 的 runc 冲突）
+      if "$PM" list installed podman >/dev/null 2>&1; then
+        log "移除 podman 全家（podman/podman-catatonit/podman-docker，与 docker-ce 冲突）"
+        "$PM" remove -y podman podman-catatonit podman-docker
+      elif "$PM" list installed podman-docker >/dev/null 2>&1; then
         log "移除 podman-docker（其 /usr/bin/docker 与 docker-ce 冲突）"
         "$PM" remove -y podman-docker
       fi
@@ -98,7 +101,8 @@ if [ "$NEED_DOCKER" = "1" ]; then
       fi
       # alinux $releasever 不是 centos 版本号，强制用 8（alinux3 兼容 el8）
       sed -i 's|\$releasever|8|g' /etc/yum.repos.d/docker-ce.repo 2>/dev/null || true
-      "$PM" install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+      # --allowerasing：alinux 自带 runc 与 containerd.io 冲突（containerd.io obsoletes runc），需允许替换
+      "$PM" install -y --allowerasing docker-ce docker-ce-cli containerd.io docker-compose-plugin
       ;;
   esac
   systemctl enable --now docker
