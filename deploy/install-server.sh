@@ -79,8 +79,8 @@ if ! command -v nginx >/dev/null 2>&1; then
   esac
 fi
 
-# Node 22（后端 ESM + 边缘 WebSocket 需要）
-if ! command -v node >/dev/null 2>&1 || [ "$(node -v 2>/dev/null | cut -d. -f1 | tr -d v)" -lt 22 ]; then
+# Node ≥ 20 即可（后端用 ws 库 + ESM；全局 WebSocket 仅门店控制台需要，服务器不跑）
+if ! command -v node >/dev/null 2>&1 || [ "$(node -v 2>/dev/null | cut -d. -f1 | tr -d v)" -lt 20 ]; then
   log "安装 Node.js 22（NodeSource）"
   case "$PM" in
     apt)
