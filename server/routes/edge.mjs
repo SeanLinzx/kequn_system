@@ -240,12 +240,16 @@ router.post("/console", async (req, res) => {
       return res.status(403).json({ error: "门店超出令牌品牌范围" });
     }
     await pool.query(
-      `INSERT INTO console_deployment (store_id, console_id, name, ip_address, port, last_seen_at)
-       VALUES (?, ?, ?, ?, ?, NOW(3))
+      `INSERT INTO console_deployment (store_id, console_id, name, ip_address, port, last_seen_at,
+        tunnel_port, tunnel_token)
+       VALUES (?, ?, ?, ?, ?, NOW(3), ?, ?)
        ON DUPLICATE KEY UPDATE
          console_id = VALUES(console_id), name = VALUES(name),
-         ip_address = VALUES(ip_address), port = VALUES(port), last_seen_at = NOW(3)`,
-      [storeId, String(b.id || ""), String(b.name || ""), String(b.ip || ""), Number(b.port || 3000)],
+         ip_address = VALUES(ip_address), port = VALUES(port), last_seen_at = NOW(3),
+         tunnel_port = COALESCE(VALUES(tunnel_port), tunnel_port),
+         tunnel_token = COALESCE(VALUES(tunnel_token), tunnel_token)`,
+      [storeId, String(b.id || ""), String(b.name || ""), String(b.ip || ""), Number(b.port || 3000),
+       b.tunnelPort != null ? Number(b.tunnelPort) : null, b.tunnelToken || null],
     );
     res.json({ ok: true, storeId });
   } catch (e) {
