@@ -38,7 +38,55 @@ case "$ARCH" in
 esac
 echo "    架构: $ARCH → 平台包: $PLATFORM"
 
-# ---------- 2. 拉取发布通道 manifest ----------
+# ---------- 2. 检测/安装 Node.js（控制台运行依赖） ----------
+NODE_BIN="$(command -v node 2>/dev/null || echo '')"
+NODE_VER=""
+if [ -n "$NODE_BIN" ]; then NODE_VER="$(node -v 2>/dev/null || echo '')"; fi
+need_node_install=0
+if [ -z "$NODE_VER" ]; then
+  need_node_install=1
+else
+  # 版本号如 v20.19.0 → 主版本 20
+  NODE_MAJOR="$(echo "$NODE_VER" | sed 's/^v//;s/\..*//')"
+  [ "${NODE_MAJOR:-0}" -lt 20 ] && need_node_install=1
+fi
+
+if [ "$need_node_install" = "1" ]; then
+  echo "==> 检测到 Node 缺失或版本过低（$NODE_VER），自动安装 Node.js 20..."
+  case "$PLATFORM" in
+    linux-arm64)
+      NODE_TARBALL="node-v20.19.0-linux-arm64"
+      ;;
+    linux-x64)
+      NODE_TARBALL="node-v20.19.0-linux-x64"
+      ;;
+  esac
+  NODE_DIST="/usr/local/lib/nodejs"
+  if [ ! -x "$NODE_DIST/$NODE_TARBALL/bin/node" ]; then
+    echo "==> 下载 Node.js 20（$PLATFORM，约 25MB）..."
+    mkdir -p "$NODE_DIST" /tmp/node-install
+    # 依次尝试官方源与国内镜像
+    for base in "https://nodejs.org/dist/v20.19.0" "https://npmmirror.com/mirrors/node/v20.19.0"; do
+      if curl -fsSL --connect-timeout 15 -o "/tmp/node-install/$NODE_TARBALL.tar.xz" "$base/$NODE_TARBALL.tar.xz"; then
+        break
+      fi
+      echo "    源 $base 失败，换下一个..."
+    done
+    tar -xJf "/tmp/node-install/$NODE_TARBALL.tar.xz" -C "$NODE_DIST"
+  fi
+  NODE_BIN="$NODE_DIST/$NODE_TARBALL/bin/node"
+  # 软链到 /usr/local/bin（PATH 通常包含）
+  ln -sf "$NODE_BIN" /usr/local/bin/node
+  ln -sf "$NODE_DIST/$NODE_TARBALL/bin/npm" /usr/local/bin/npm
+  ln -sf "$NODE_DIST/$NODE_TARBALL/bin/npx" /usr/local/bin/npx 2>/dev/null || true
+  hash -r
+  NODE_BIN="/usr/local/bin/node"
+  echo "==> Node 安装完成: $(node -v 2>/dev/null || echo "$NODE_BIN")"
+fi
+
+echo "    使用 node: $NODE_BIN"
+
+# ---------- 3. 拉取发布通道 manifest ----------
 MANIFEST_URL="${SERVER_URL}/releases/camera-local-console/channels/${CHANNEL}.json"
 echo "==> 拉取发布清单: $MANIFEST_URL"
 MANIFEST="$(curl -fsSL "$MANIFEST_URL")"
@@ -57,7 +105,7 @@ if [ -z "$PACKAGE_URL" ] || [ -z "$PACKAGE_SHA" ]; then
 fi
 echo "    版本: ${VERSION:-?}  包: $PACKAGE_URL"
 
-# ---------- 3. 下载 + 校验 + 解压 ----------
+# ---------- 4. 下载 + 校验 + 解压 ----------
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 PKG_FILE="${TMP}/package.tar.gz"
@@ -69,14 +117,14 @@ mkdir -p "$INSTALL_DIR"
 echo "==> 解压到 $INSTALL_DIR"
 tar -xzf "$PKG_FILE" -C "$INSTALL_DIR" --strip-components=1
 
-# ---------- 4. 写入配置（serverUrl + token） ----------
+# ---------- 5. 写入配置（serverUrl + token） ----------
 CONFIG_DIR="$INSTALL_DIR/data"
 mkdir -p "$CONFIG_DIR"
 if [ -f "$CONFIG_DIR/config.json" ]; then
   # 保留现有配置，仅覆盖 server 相关字段
   cp "$CONFIG_DIR/config.json" "$TMP/config.bak" || true
 fi
-node -e "
+"$NODE_BIN" -e "
 const fs = require('fs');
 const p = process.argv[1];
 const url = process.argv[2];
@@ -93,13 +141,13 @@ fs.writeFileSync(p, JSON.stringify(cfg, null, 2));
 }
 echo "==> 已写入 serverUrl + token"
 
-# ---------- 5. 自动绑定门店（用 token 调 bootstrap） ----------
+# ---------- 6. 自动绑定门店（用 token 调 bootstrap） ----------
 echo "==> 调 bootstrap 自动绑定门店..."
 BOOTSTRAP="$(curl -fsSL -H "X-Access-Token: $TOKEN" "${SERVER_URL}/api/edge/bootstrap" || echo '')"
 STORE_ID="$(echo "$BOOTSTRAP" | grep -o '"id"[[:space:]]*:[[:space:]]*[0-9]*' | head -1 | sed 's/.*:[[:space:]]*//' || true)"
 STORE_NAME="$(echo "$BOOTSTRAP" | grep -o '"name"[^,]*' | head -1 | sed 's/.*"name"[[:space:]]*:[[:space:]]*"//;s/"$//' || true)"
 if [ -n "$STORE_ID" ]; then
-  node -e "
+  "$NODE_BIN" -e "
 const fs = require('fs');
 const p = process.argv[1]; const id = process.argv[2]; const name = process.argv[3];
 const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
@@ -111,7 +159,13 @@ else
   echo "    ⚠️ 未能自动绑定门店（品牌令牌需在控制台首次进入时选择门店）"
 fi
 
-# ---------- 6. 注册 systemd 服务 ----------
+# ---------- 7. 注册 systemd 服务 ----------
+# NODE_BIN 已在前面「检测/安装 Node.js」段确定（绝对路径，systemd 需要）
+if [ -z "$NODE_BIN" ] || [ ! -x "$NODE_BIN" ]; then
+  echo "❌ 未找到 node，无法启动控制台（前面自动安装失败）"
+  exit 1
+fi
+echo "==> 使用 node: $NODE_BIN"
 SERVICE="/etc/systemd/system/camera-local-console.service"
 cat > "$SERVICE" <<EOF
 [Unit]
@@ -122,7 +176,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=$INSTALL_DIR
-ExecStart=$(command -v node) src/server.js
+ExecStart=$NODE_BIN src/server.js
 Restart=always
 RestartSec=5
 Environment=PORT=3000
@@ -135,9 +189,9 @@ systemctl enable camera-local-console
 systemctl restart camera-local-console
 echo "==> systemd 服务已注册并启动: camera-local-console"
 
-# ---------- 7. SSH 反向隧道（A 方案：Web 终端运维） ----------
+# ---------- 8. SSH 反向隧道（A 方案：Web 终端运维） ----------
 echo "==> 配置 SSH 反向隧道（Web 终端运维）..."
-CONSOLE_ID="$(node -e "try{console.log(JSON.parse(require('fs').readFileSync('$CONFIG_DIR/config.json','utf8')).console?.id||'')}catch(e){console.log('')}" 2>/dev/null || echo '')"
+CONSOLE_ID="$("$NODE_BIN" -e "try{console.log(JSON.parse(require('fs').readFileSync('$CONFIG_DIR/config.json','utf8')).console?.id||'')}catch(e){console.log('')}" 2>/dev/null || echo '')"
 SSH_SETUP="$(curl -fsSL -X POST -H "X-Access-Token: $TOKEN" -H "Content-Type: application/json" -d "{\"consoleId\":\"${CONSOLE_ID}\"}" "${SERVER_URL}/api/edge/ssh-setup" || echo '')"
 SSH_PORT="$(echo "$SSH_SETUP" | grep -o '"sshPort"[^,]*' | head -1 | sed 's/.*:[[:space:]]*//;s/[^0-9]//g' || true)"
 SSH_PUBKEY="$(echo "$SSH_SETUP" | grep -o '"publicKey"[^,]*' | head -1 | sed 's/.*"publicKey"[[:space:]]*:[[:space:]]*"//;s/"$//' | sed 's/\\\\n/\n/g' || true)"
@@ -197,7 +251,7 @@ else
   echo "    ⚠️ SSH 隧道配置跳过（ssh-setup 未返回有效信息，检查网络/令牌）"
 fi
 
-# ---------- 8. 完成 ----------
+# ---------- 9. 完成 ----------
 sleep 3
 echo ""
 echo "============================================================"
