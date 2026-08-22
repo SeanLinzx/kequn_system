@@ -4,7 +4,7 @@
 # 用法（在门店 Linux 服务器上执行，需联网 + root/sudo）：
 #   curl -fsSL <数据服务地址>/install/linux.sh | sudo bash -s -- <门店令牌> [数据服务地址]
 # 示例：
-#   curl -fsSL https://kequn.fenqunshuju.com/install/linux.sh | sudo bash -s -- abc123...
+#   curl -fsSL https://kequn.fenqunshuju.com:8443/install/linux.sh | sudo bash -s -- abc123...
 # 说明：
 #   - 从数据服务地址的发布通道拉取最新 Linux 安装包（按架构 arm64/x64）
 #   - 自动写入 serverUrl + token → 调 bootstrap 自动绑定门店 → 注册 systemd 自启
@@ -13,7 +13,7 @@
 set -euo pipefail
 
 TOKEN="${1:-}"
-SERVER_URL="${2:-https://kequn.fenqunshuju.com}"
+SERVER_URL="${2:-https://kequn.fenqunshuju.com:8443}"
 SERVER_URL="${SERVER_URL%/}"
 
 if [ -z "$TOKEN" ]; then

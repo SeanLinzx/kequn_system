@@ -6,8 +6,9 @@ import http from "node:http";
 import { randomBytes } from "node:crypto";
 import { pool } from "../db-mysql.mjs";
 
-const TUNNEL_PORT_BASE = 31000;
-const TUNNEL_PORT_MAX = 31999;
+// 隧道端口段：33000-33999（避开服务器既有服务 31001、SSH 隧道 32000-32999、nginx 8443）
+const TUNNEL_PORT_BASE = 33000;
+const TUNNEL_PORT_MAX = 33999;
 const HEARTBEAT_TIMEOUT_MS = 90_000;
 
 const connections = new Map(); // tunnelPort -> { ws, storeId }

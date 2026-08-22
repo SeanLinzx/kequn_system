@@ -267,9 +267,11 @@ else
 fi
 
 # ---------- 完成 ----------
+# 主站端口（默认 8443；如 80/443 未被占用可改回 443）
+HTTPS_PORT="${HTTPS_PORT:-8443}"
 log "================ 部署完成 ================"
 echo ""
-echo "  网站地址:    https://${DOMAIN}"
+echo "  网站地址:    https://${DOMAIN}:${HTTPS_PORT}"
 echo "  后端健康:    http://127.0.0.1:3011/api/health"
 echo "  后端目录:    ${APP_DIR}"
 echo "  .env 文件:   ${APP_DIR}/.env（内含 MySQL 密码，请妥善保存）"
@@ -285,8 +287,8 @@ echo "  1) 将证书 zip 解压出的 .pem/.key 放到 ${SSL_DIR}/"
 echo "     cp ${DOMAIN}.pem ${SSL_DIR}/ && cp ${DOMAIN}.key ${SSL_DIR}/ && chmod 600 ${SSL_DIR}/${DOMAIN}.key"
 echo "  2) 校验并启用 nginx："
 echo "     nginx -t && systemctl reload nginx"
-echo "  3) 放行防火墙：22、80、443、31000-31999"
+echo "  3) 放行防火墙：22、${HTTPS_PORT}、33000-33999（隧道）"
 echo ""
 echo "  门店 Linux 一键安装命令（用管理面板中的门店令牌替换 <门店token>）："
-echo "    curl -fsSL https://${DOMAIN}/install/linux.sh | sudo bash -s -- <门店token> https://${DOMAIN}"
+echo "    curl -fsSL https://${DOMAIN}:${HTTPS_PORT}/install/linux.sh | sudo bash -s -- <门店token> https://${DOMAIN}:${HTTPS_PORT}"
 echo ""
