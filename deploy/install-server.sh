@@ -110,6 +110,26 @@ if [ "$NEED_DOCKER" = "1" ]; then
 fi
 docker compose version >/dev/null 2>&1 || die "docker compose 插件不可用，请手动安装 docker-compose-plugin 后重试"
 
+# 国内镜像加速（Docker Hub 直连经常超时）：已有配置则跳过
+if [ ! -f /etc/docker/daemon.json ] || ! grep -q "registry-mirrors" /etc/docker/daemon.json 2>/dev/null; then
+  log "配置 Docker 国内镜像加速器"
+  mkdir -p /etc/docker
+  if [ -f /etc/docker/daemon.json ]; then
+    cp /etc/docker/daemon.json /etc/docker/daemon.json.bak 2>/dev/null || true
+  fi
+  cat > /etc/docker/daemon.json <<'EOF'
+{
+  "registry-mirrors": [
+    "https://docker.m.daocloud.io",
+    "https://docker.1panel.live",
+    "https://hub.rat.dev"
+  ]
+}
+EOF
+  systemctl daemon-reload && systemctl restart docker
+  sleep 3
+fi
+
 if ! command -v nginx >/dev/null 2>&1; then
   log "安装 nginx"
   case "$PM" in
