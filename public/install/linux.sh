@@ -28,8 +28,11 @@ CHANNEL="${CHANNEL:-stable}"
 
 echo "==> camera-local-console Linux 远程安装"
 echo "    数据服务: $SERVER_URL  通道: $CHANNEL  安装目录: $INSTALL_DIR"
+echo "    全程约 2-5 分钟（含 Node 下载/安装包下载），网络慢时请耐心等待进度条"
+echo ""
 
 # ---------- 1. 识别架构 ----------
+echo "[1/9] 识别架构..."
 ARCH="$(uname -m)"
 case "$ARCH" in
   aarch64|arm64) PLATFORM="linux-arm64" ;;
@@ -39,6 +42,7 @@ esac
 echo "    架构: $ARCH → 平台包: $PLATFORM"
 
 # ---------- 2. 检测/安装 Node.js（控制台运行依赖） ----------
+echo "[2/9] 检测/安装 Node.js..."
 NODE_BIN="$(command -v node 2>/dev/null || echo '')"
 NODE_VER=""
 if [ -n "$NODE_BIN" ]; then NODE_VER="$(node -v 2>/dev/null || echo '')"; fi
@@ -65,9 +69,10 @@ if [ "$need_node_install" = "1" ]; then
   if [ ! -x "$NODE_DIST/$NODE_TARBALL/bin/node" ]; then
     echo "==> 下载 Node.js 20（$PLATFORM，约 25MB）..."
     mkdir -p "$NODE_DIST" /tmp/node-install
-    # 依次尝试官方源与国内镜像
+    # 依次尝试官方源与国内镜像（--progress-bar 显示进度；--max-time 防无限卡住）
     for base in "https://nodejs.org/dist/v20.19.0" "https://npmmirror.com/mirrors/node/v20.19.0"; do
-      if curl -fsSL --connect-timeout 15 -o "/tmp/node-install/$NODE_TARBALL.tar.xz" "$base/$NODE_TARBALL.tar.xz"; then
+      echo "    下载源: $base"
+      if curl -fsSL --connect-timeout 15 --max-time 600 --progress-bar -o "/tmp/node-install/$NODE_TARBALL.tar.xz" "$base/$NODE_TARBALL.tar.xz"; then
         break
       fi
       echo "    源 $base 失败，换下一个..."
@@ -87,6 +92,7 @@ fi
 echo "    使用 node: $NODE_BIN"
 
 # ---------- 3. 拉取发布通道 manifest ----------
+echo "[3/9] 拉取发布清单..."
 MANIFEST_URL="${SERVER_URL}/releases/camera-local-console/channels/${CHANNEL}.json"
 echo "==> 拉取发布清单: $MANIFEST_URL"
 MANIFEST="$(curl -fsSL "$MANIFEST_URL")"
@@ -106,11 +112,12 @@ fi
 echo "    版本: ${VERSION:-?}  包: $PACKAGE_URL"
 
 # ---------- 4. 下载 + 校验 + 解压 ----------
+echo "[4/9] 下载安装包（进度条见下）..."
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 PKG_FILE="${TMP}/package.tar.gz"
 echo "==> 下载安装包..."
-curl -fsSL -o "$PKG_FILE" "$PACKAGE_URL"
+curl -fsSL --max-time 600 --progress-bar -o "$PKG_FILE" "$PACKAGE_URL"
 echo "    sha256 校验..."
 echo "$PACKAGE_SHA  $PKG_FILE" | sha256sum -c - >/dev/null || { echo "❌ SHA256 校验失败，安装包可能损坏或下载不完整"; exit 1; }
 mkdir -p "$INSTALL_DIR"
@@ -118,6 +125,7 @@ echo "==> 解压到 $INSTALL_DIR"
 tar -xzf "$PKG_FILE" -C "$INSTALL_DIR" --strip-components=1
 
 # ---------- 5. 写入配置（serverUrl + token） ----------
+echo "[5/9] 写入配置..."
 CONFIG_DIR="$INSTALL_DIR/data"
 mkdir -p "$CONFIG_DIR"
 if [ -f "$CONFIG_DIR/config.json" ]; then
@@ -142,6 +150,7 @@ fs.writeFileSync(p, JSON.stringify(cfg, null, 2));
 echo "==> 已写入 serverUrl + token"
 
 # ---------- 6. 自动绑定门店（用 token 调 bootstrap） ----------
+echo "[6/9] 自动绑定门店..."
 echo "==> 调 bootstrap 自动绑定门店..."
 BOOTSTRAP="$(curl -fsSL -H "X-Access-Token: $TOKEN" "${SERVER_URL}/api/edge/bootstrap" || echo '')"
 STORE_ID="$(echo "$BOOTSTRAP" | grep -o '"id"[[:space:]]*:[[:space:]]*[0-9]*' | head -1 | sed 's/.*:[[:space:]]*//' || true)"
@@ -160,6 +169,7 @@ else
 fi
 
 # ---------- 7. 注册 systemd 服务 ----------
+echo "[7/9] 注册 systemd 服务..."
 # NODE_BIN 已在前面「检测/安装 Node.js」段确定（绝对路径，systemd 需要）
 if [ -z "$NODE_BIN" ] || [ ! -x "$NODE_BIN" ]; then
   echo "❌ 未找到 node，无法启动控制台（前面自动安装失败）"
@@ -190,6 +200,7 @@ systemctl restart camera-local-console
 echo "==> systemd 服务已注册并启动: camera-local-console"
 
 # ---------- 8. SSH 反向隧道（A 方案：Web 终端运维） ----------
+echo "[8/9] 配置 SSH 反向隧道..."
 echo "==> 配置 SSH 反向隧道（Web 终端运维）..."
 CONSOLE_ID="$("$NODE_BIN" -e "try{console.log(JSON.parse(require('fs').readFileSync('$CONFIG_DIR/config.json','utf8')).console?.id||'')}catch(e){console.log('')}" 2>/dev/null || echo '')"
 SSH_SETUP="$(curl -fsSL -X POST -H "X-Access-Token: $TOKEN" -H "Content-Type: application/json" -d "{\"consoleId\":\"${CONSOLE_ID}\"}" "${SERVER_URL}/api/edge/ssh-setup" || echo '')"
@@ -252,6 +263,7 @@ else
 fi
 
 # ---------- 9. 完成 ----------
+echo "[9/9] 完成"
 sleep 3
 echo ""
 echo "============================================================"
