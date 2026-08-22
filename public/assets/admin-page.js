@@ -174,13 +174,35 @@ async function loadStores() {
             <td class="muted">${esc(s.location || "—")}</td>
             <td>${s.is_demo ? '<span class="tag tag-yellow">演示</span>' : '<span class="tag tag-green">真实</span>'}</td>
             <td>${s.token ? `<code class="copy-input" style="max-width:150px">${esc(s.token)}</code> <button class="btn secondary btn-xs tk-copy" data-token="${esc(s.token)}">复制</button>` : '<span class="muted">—</span>'}</td>
-            ${canDelete ? `<td><button class="btn warn btn-xs st-del" data-id="${s.id}" data-name="${esc(s.name)}">删除</button></td>` : ""}
+            ${canDelete ? `<td><button class="btn secondary btn-xs st-install" data-id="${s.id}" data-name="${esc(s.name)}" ${s.token ? "" : "disabled"}>安装命令</button> <button class="btn warn btn-xs st-del" data-id="${s.id}" data-name="${esc(s.name)}">删除</button></td>` : ""}
           </tr>`).join("")}</tbody></table></div>`
       : "<p class='muted'>暂无门店</p>";
     document.querySelectorAll(".tk-copy").forEach((btn) => {
       btn.onclick = () => copyText(btn.dataset.token, "令牌");
     });
     if (canDelete) {
+      document.querySelectorAll(".st-install").forEach((btn) => {
+        btn.onclick = async function () {
+          const storeId = btn.dataset.id;
+          const storeName = btn.dataset.name;
+          try {
+            // 找该门店的令牌 id（先取令牌列表）
+            const tokens = await FenqunAPI.api("/site-tokens");
+            const storeToken = (tokens.tokens || []).find((t) => String(t.storeId) === String(storeId));
+            if (!storeToken) {
+              FenqunAPI.toast("该门店无令牌");
+              return;
+            }
+            const upd = await FenqunAPI.api("/site-tokens/" + storeToken.id + "/install-code", { method: "POST" });
+            const code = upd.token.installCode;
+            const origin = location.origin;
+            const cmd = `curl -fsSL ${origin}/api/install-code/${code} | sudo bash`;
+            showInstallCodeModal(storeName, code, cmd, origin);
+          } catch (e) {
+            FenqunAPI.toast(e.message);
+          }
+        };
+      });
       document.querySelectorAll(".st-del").forEach((btn) => {
         btn.onclick = async function () {
           if (!confirm(`确定删除门店「${btn.dataset.name}」？`)) return;
@@ -199,6 +221,21 @@ async function loadStores() {
     document.getElementById("storeList").innerHTML = `<div class="warn-box">${esc(e.message)}</div>`;
   }
 }
+function showInstallCodeModal(storeName, code, cmd, origin) {
+  const modal = document.getElementById("installCodeModal");
+  if (!modal) return;
+  document.getElementById("icmStoreName").textContent = storeName || "";
+  const cmdEl = document.getElementById("icmCommand");
+  cmdEl.value = cmd;
+  document.getElementById("icmNote").textContent =
+    `短码 ${code} 已生成（24h 有效，兑换即失效）。现场执行后自动下载安装包并绑定门店。`;
+  modal.style.display = "flex";
+  document.getElementById("icmCopy").onclick = () => copyText(cmdEl.value, "安装命令");
+  document.getElementById("icmClose").onclick = () => { modal.style.display = "none"; };
+  // 点击遮罩关闭
+  modal.onclick = (e) => { if (e.target === modal) modal.style.display = "none"; };
+}
+
 function fillStoreFilter(id, stores) {
   const sel = document.getElementById(id);
   if (!sel) return;

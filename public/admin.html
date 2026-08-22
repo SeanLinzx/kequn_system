@@ -215,6 +215,22 @@
   </div>
 </div>
 
+ <div class="modal-mask" id="installCodeModal" style="display:none">
+  <div class="modal-box" style="max-width:640px">
+    <h3>门店安装命令 · <span id="icmStoreName"></span></h3>
+    <p class="muted">让现场人员在门店 Linux 上执行下面这条命令（短码一次性、24 小时有效）：</p>
+    <div class="field" style="margin-top:10px">
+      <label>现场执行命令</label>
+      <input type="text" id="icmCommand" readonly class="copy-input" style="width:100%;font-family:monospace"/>
+    </div>
+    <p class="muted" id="icmNote">短码兑换后 token 自动注入脚本，无需现场输入长令牌。</p>
+    <div class="form-actions">
+      <button class="btn" id="icmCopy">复制命令</button>
+      <button class="btn secondary" id="icmClose">关闭</button>
+    </div>
+  </div>
+</div>
+
 <script src="assets/api.js"></script>
 <script src="assets/ai-progress.js"></script>
 <script src="assets/executor-admin.js"></script>

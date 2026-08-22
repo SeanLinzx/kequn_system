@@ -49,11 +49,14 @@ CREATE TABLE IF NOT EXISTS site_token (
   store_id     BIGINT UNSIGNED NULL,            -- 门店 token（一门店至多一个）
   enabled      TINYINT     NOT NULL DEFAULT 1,
   last_used_at DATETIME(3) NULL,
+  install_code VARCHAR(16) NULL,                -- 门店现场安装短码（一次性，可过期）
+  install_code_expires_at DATETIME(3) NULL,     -- 短码过期时间
   created_at   DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   UNIQUE KEY uk_brand (brand_id),
   UNIQUE KEY uk_store (store_id),
   KEY idx_brand (brand_id),
-  KEY idx_store (store_id)
+  KEY idx_store (store_id),
+  UNIQUE KEY uk_install_code (install_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 控制台部署记录（门店员工通过门店 Wi-Fi/同子网访问 camera-local-console 用）

@@ -1,6 +1,6 @@
 import "./load-env.mjs";
 import express from "express";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,6 +8,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 import { initDb, seedDb } from "./db.mjs";
 import { initMysql, pingMysql } from "./db-mysql.mjs";
+import { pool } from "./db-mysql.mjs";
 import { handleTunnelConnection } from "./services/tunnel-server.mjs";
 import { handleSshConnection } from "./services/ssh-tunnel.mjs";
 import { WebSocketServer } from "ws";
@@ -78,6 +79,40 @@ app.use("/api/customer", customerInsightRoutes);
 
 // 边缘事件接收（保持旧协议，无鉴权）
 app.use("/api/hik", hikRoutes);
+
+// 门店安装短码兑换（免鉴权）：GET /api/install-code/:code → 返回注入 token 的安装脚本
+// 现场执行：curl -fsSL https://<域名>/api/install-code/<短码> | sudo bash
+app.get("/api/install-code/:code", async (req, res) => {
+  try {
+    const code = String(req.params.code || "").trim().toUpperCase();
+    const [rows] = await pool.query(
+      `SELECT t.token, s.name AS store_name FROM site_token t
+       JOIN store s ON s.id = t.store_id
+       WHERE t.install_code = ? AND t.install_code_expires_at IS NOT NULL
+         AND t.install_code_expires_at > NOW(3) AND t.enabled = 1`,
+      [code],
+    );
+    const hit = rows[0];
+    if (!hit) {
+      res.status(404).send("安装短码无效或已过期，请联系管理员重新生成");
+      return;
+    }
+    // 一次性使用：兑换后立即失效
+    await pool.query(
+      "UPDATE site_token SET install_code = NULL, install_code_expires_at = NULL WHERE install_code = ?",
+      [code],
+    );
+    // 读取安装脚本并注入 token（保持脚本逻辑不变，仅填 token）
+    const script = readFileSync(join(__dirname, "..", "public", "install", "linux.sh"), "utf8");
+    const serverUrl = process.env.TUNNEL_PUBLIC_URL || `https://${req.hostname}`;
+    const injected = script
+      .replace(/^TOKEN="\$\{1:-\}"/m, `TOKEN="${hit.token}"`)
+      .replace(/^SERVER_URL="\$\{2:-[^}]*\}"/m, `SERVER_URL="${serverUrl.replace(/\/+$/, "")}"`);
+    res.type("text/plain").send(`# 安装门店：${hit.store_name}\n# 短码已兑换，token 已注入\n${injected}`);
+  } catch (e) {
+    res.status(500).send("短码兑换失败：" + e.message);
+  }
+});
 
 // 管理与注册（JWT / 接入令牌）
 app.use("/api/brands", brandRoutes);

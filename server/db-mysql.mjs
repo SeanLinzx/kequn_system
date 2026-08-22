@@ -33,6 +33,9 @@ export async function runSchema() {
     // 增量迁移：旧库补充新列（ALTER 重复列会报错，忽略即可）
     const migrations = [
       "ALTER TABLE sys_user ADD COLUMN must_change_password TINYINT NOT NULL DEFAULT 0 AFTER role",
+      "ALTER TABLE site_token ADD COLUMN install_code VARCHAR(16) NULL AFTER last_used_at",
+      "ALTER TABLE site_token ADD COLUMN install_code_expires_at DATETIME(3) NULL AFTER install_code",
+      "ALTER TABLE site_token ADD UNIQUE KEY uk_install_code (install_code)",
     ];
     for (const sql of migrations) {
       try { await raw.query(sql); } catch {}

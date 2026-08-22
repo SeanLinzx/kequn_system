@@ -19,8 +19,18 @@ function tokenRow(r) {
     storeName: r.store_name || null,
     enabled: r.enabled === 1,
     lastUsedAt: r.last_used_at,
+    installCode: r.install_code || null,
+    installCodeExpiresAt: r.install_code_expires_at || null,
     createdAt: r.created_at,
   };
+}
+
+/** 8 位安装短码：去易混淆字符（0/O/1/I/L），24h 有效 */
+function makeInstallCode() {
+  const CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  let s = "";
+  for (let i = 0; i < 8; i++) s += CHARS[Math.floor(Math.random() * CHARS.length)];
+  return s;
 }
 
 // 令牌列表（按角色过滤：超管全部；品牌管理员=本品牌品牌令牌+本品牌门店令牌；门店管理员=本门店令牌）
@@ -103,6 +113,43 @@ router.put("/:id", requireRole("super_admin"), async (req, res) => {
       [req.params.id],
     );
     res.json({ token: tokenRow(rows[0]) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 生成/刷新门店安装短码（super_admin / ops_manager，仅门店令牌）
+// 短码：8 位大写字母数字（去易混淆字符），24 小时有效，用于门店现场免 token 安装
+router.post("/:id/install-code", async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT t.*, s.name AS store_name FROM site_token t
+       LEFT JOIN store s ON s.id = t.store_id WHERE t.id = ?`,
+      [req.params.id],
+    );
+    const t = rows[0];
+    if (!t) return res.status(404).json({ error: "令牌不存在" });
+    if (t.store_id == null) return res.status(400).json({ error: "仅门店令牌可生成安装短码" });
+    // 权限：超管任意；品牌管理员仅本品牌门店令牌
+    if (req.user.role !== "super_admin") {
+      const stores = await getUserStores(req.user.id, req.user.role);
+      if (!stores.some((s) => s.id === t.store_id)) {
+        return res.status(403).json({ error: "无权限" });
+      }
+    }
+    const code = makeInstallCode();
+    const expiresAt = new Date(Date.now() + 24 * 3600 * 1000);
+    await pool.query(
+      "UPDATE site_token SET install_code = ?, install_code_expires_at = ? WHERE id = ?",
+      [code, expiresAt, t.id],
+    );
+    const [updated] = await pool.query(
+      `SELECT t.*, b.name AS brand_name, s.name AS store_name FROM site_token t
+       LEFT JOIN brand b ON b.id = t.brand_id LEFT JOIN store s ON s.id = t.store_id
+       WHERE t.id = ?`,
+      [t.id],
+    );
+    res.json({ token: tokenRow(updated[0]) });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
