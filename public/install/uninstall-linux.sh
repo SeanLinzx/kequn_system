@@ -64,6 +64,20 @@ rm -f "/etc/systemd/system/${CONSOLE_SVC}.service"
 rm -f "/etc/systemd/system/${SSH_SVC}.service"
 systemctl daemon-reload 2>/dev/null || true
 
+# ---------- 2.5 清理残留隧道进程 ----------
+# autossh 停止时其 fork 的 ssh 子进程可能残留，反向隧道仍存活 → 必须杀掉
+echo "==> 清理残留 autossh/ssh 隧道进程..."
+pkill -f "autossh" 2>/dev/null || true
+pkill -f "ssh.*-R.*localhost:22" 2>/dev/null || true
+sleep 1
+if ss -tlnp 2>/dev/null | grep -qE ":(32[0-9]{3}) " ; then
+  echo "    ⚠️ 仍有隧道端口占用，尝试强制清理..."
+  pkill -9 -f "autossh" 2>/dev/null || true
+  pkill -9 -f "ssh.*-R.*localhost:22" 2>/dev/null || true
+else
+  echo "    ✅ 隧道进程已清理（32000-32999 无占用）"
+fi
+
 # ---------- 3. 删除安装目录 ----------
 echo "==> 删除安装目录 $INSTALL_DIR ..."
 # 先记录门店网关公钥指纹（供总部清理用），再删目录
