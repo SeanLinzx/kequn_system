@@ -199,7 +199,7 @@ async function main() {
   // 旧版业绩诊断 JSON 漏斗文件（demo 品牌门店专属；test/真实品牌不生成）
   for (const store of stores) {
     const [rows] = await pool.query(
-      `SELECT DATE(f.stat_time) AS d, DAYOFWEEK(f.stat_time) AS wd, SUM(f.pass_count) AS p, SUM(f.enter_count) AS e
+      `SELECT DATE(f.stat_time) AS d, DAYOFWEEK(MIN(f.stat_time)) AS wd, SUM(f.pass_count) AS p, SUM(f.enter_count) AS e
        FROM camera_people_flow f
        JOIN camera_device dev ON dev.device_index_code = f.device_index_code
        WHERE f.store_id = ? AND dev.position_type = 'OUTSIDE_PASSBY'
