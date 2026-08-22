@@ -56,34 +56,8 @@
         ],
       },
     ],
-    valueDemoSections: [
-      {
-        title: "面向连锁门店经营",
-        sub: "单店与连锁视角：把客群数据变成日常经营动作",
-        items: [
-          { num: "01", name: "门店客群报告", path: "/fenqun/demo1-crowd-report/index.html", desc: "昨日/近7日客群统计 + AI 排班策略", tags: ["真实数据", "AI报告"], templateId: "hourly_display" },
-          { num: "02", name: "分时段品类动销", path: "/fenqun/demo2-hourly-promo/index.html", desc: "SKU×客群匹配的分时段动销方案", tags: ["AI执行方案"], templateId: "hourly_display" },
-          { num: "03", name: "爆品推荐策略", path: "/fenqun/demo3-hot-products/index.html", desc: "互联网爆款 + 门店人群 AI 选品", tags: ["补货建议"], templateId: "traffic_boost" },
-          { num: "04", name: "异业联动策略", path: "/fenqun/demo4-cross-industry/index.html", desc: "业态推理链 + 店中店联动", tags: ["AI策略"], templateId: "traffic_boost" },
-          { num: "05", name: "商圈地图渗透率", path: "/fenqun/demo5-trade-area-map/index.html", desc: "商圈人群 vs 门店过店进店", tags: ["地图"], templateId: "traffic_boost" },
-        ],
-      },
-      {
-        title: "面向工业品牌 / 厂家",
-        sub: "渠道投放与产品研发视角：用客群数据指挥铺货与创新",
-        items: [
-          { num: "06", name: "优质终端地图", path: "/fenqun/demo6-premium-stores-map/index.html", desc: "长沙四象限终端投放地图", tags: ["四象限"], templateId: "hourly_display" },
-          { num: "07", name: "品类作战地图", path: "/fenqun/demo7-category-battle-map/index.html", desc: "商品×门店×时段差异化策略", tags: ["作战地图"], templateId: "hourly_display" },
-          { num: "08", name: "产品矩阵拓展", path: "/fenqun/demo8-product-matrix/index.html", desc: "爆款关联库 + AI 产品矩阵", tags: ["厂家视角"], templateId: "aov_lift" },
-        ],
-      },
-      {
-        title: "真实门店深度分析案例",
-        sub: "销售明细 × 分时段客流 · 完整决策报告套件",
-        items: [
-          { num: "★", name: "标杆门店深度案例", path: "/fenqun/example1/index.html", desc: "长沙标杆门店 20+ 决策报告总览", tags: ["标杆案例"], templateId: "hourly_display" },
-        ],
-      },
-    ],
+    // 旧系统「客群价值 Demo 目录」（/fenqun/demo*/、/fenqun/example1/）为 www 站独立报告库，
+    // 本项目不包含这些静态报告页，已移除死链。报告能力以「决策报告库 · 按数据来源」与 crowd-report 为准。
+    valueDemoSections: [],
   };
 })();

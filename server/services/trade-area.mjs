@@ -214,8 +214,9 @@ export function getTradeArea(storeId) {
       isMock: false,
       ...meta,
       ...data,
-      reportUrl: "/fenqun/example1/index.html",
-      mapReportUrl: "/fenqun/demo5-trade-area-map/index.html",
+      // 旧系统报告库（/fenqun/example1、/fenqun/demo5）不在本项目部署中，置空避免死链
+      reportUrl: null,
+      mapReportUrl: null,
     };
   }
 

@@ -39,6 +39,15 @@
     if (!frame) return;
     if (loadedFrames[frameId] === url) return;
     loadedFrames[frameId] = url;
+    // 旧系统报告库（/fenqun/example1、/fenqun/demo*）不在本项目部署中，显示提示而非死链
+    if (String(url).indexOf("/fenqun/") === 0) {
+      frame.innerHTML =
+        '<div class="warn-box" style="margin:0;padding:24px;text-align:center">' +
+        "<h4>完整交互报告库</h4>" +
+        '<p class="muted">该报告属于旧版演示报告库（/fenqun/…），当前部署未包含此页面。</p>' +
+        '<p class="muted">客群洞察请使用「运营工作台 → 客群基本信息」。</p></div>';
+      return;
+    }
     if (window.ReportEmbed) {
       ReportEmbed.openReport(frame, url, name, templateId);
     } else {

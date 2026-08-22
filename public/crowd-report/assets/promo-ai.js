@@ -14,10 +14,7 @@
     "UI界面截图、App界面、手持手机、3D手机模型、样机展示、海报嵌在手机里。" +
     "直接生成可上门店竖屏电子屏的促销海报，不要任何设备外框。";
 
-  const API_BASE =
-    location.hostname === "localhost" || location.hostname === "127.0.0.1"
-      ? ""
-      : "/fenqun/api";
+  const API_BASE = "/api";
 
   function apiUrl(path) {
     return API_BASE + path;

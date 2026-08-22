@@ -127,8 +127,9 @@ export function getStoreDashboard(storeId) {
     actions,
     monthly: months,
     hourlyGaps: hourly,
-    hasFullReports: storeId === "dadao-yintan",
-    reportBase: storeId === "dadao-yintan" ? "/fenqun/example1/" : null,
+    hasFullReports: false,
+    // 完整报告库（旧系统 /fenqun/example1 静态报告页）不在本项目部署中，置空
+    reportBase: null,
     tradeArea: getTradeArea(storeId),
   };
 }

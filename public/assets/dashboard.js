@@ -83,7 +83,7 @@
     if (!window.REPORT_CATALOG) return "";
     const base = data.reportBase;
     let html = `<div class="card"><h3>决策报告库 · 按数据来源</h3>
-      <p class="muted">点击下方卡片在内嵌窗口查看完整 Demo 报告（与 example1 决策看板一致）</p>`;
+      <p class="muted">点击下方卡片在内嵌窗口查看完整报告</p>`;
     if (!base) {
       html += `<div class="warn-box">当前为模拟门店，完整 20+ 报告请切换至 <b>长沙望城银杉路零食店</b> 查看。</div>`;
     }
@@ -102,14 +102,17 @@
     }
     html += "</div></div>";
 
-    html += `<div class="card" id="valueDemoCatalog"><h3>客群价值 Demo 目录</h3>
-      <p class="muted">8 大业务场景 + 真实门店深度案例，与 demo 门户目录一致（5 + 3 + 案例）</p>`;
-    for (const sec of REPORT_CATALOG.valueDemoSections) {
-      html += `<div class="demo-section">
-        <div class="demo-section-hd"><h4>${sec.title}</h4><span>${sec.sub}</span></div>
-        <div class="demo-grid">${sec.items.map(renderDemoCard).join("")}</div></div>`;
+    const demoSections = REPORT_CATALOG.valueDemoSections || [];
+    if (demoSections.length) {
+      html += `<div class="card" id="valueDemoCatalog"><h3>客群价值 Demo 目录</h3>
+        <p class="muted">8 大业务场景 + 真实门店深度案例，与 demo 门户目录一致（5 + 3 + 案例）</p>`;
+      for (const sec of demoSections) {
+        html += `<div class="demo-section">
+          <div class="demo-section-hd"><h4>${sec.title}</h4><span>${sec.sub}</span></div>
+          <div class="demo-grid">${sec.items.map(renderDemoCard).join("")}</div></div>`;
+      }
+      html += "</div>";
     }
-    html += "</div>";
     return html;
   }
 
