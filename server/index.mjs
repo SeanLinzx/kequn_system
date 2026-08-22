@@ -134,7 +134,19 @@ if (existsSync(UPLOAD_DIR)) {
 }
 
 // 静态前端（本地部署单进程即可访问；生产可继续用 nginx 托管 public/ 并反代 API）
-app.use(express.static(PUBLIC_DIR));
+// 缓存策略：HTML 不缓存（no-store，确保每次拉最新页面 → 最新 JS/CSS 引用）；
+// JS/CSS 等资源短缓存 + ETag 重新验证（避免改代码后浏览器还用旧文件）
+const staticOpts = {
+  etag: true,
+  setHeaders(res, filePath) {
+    if (filePath.endsWith(".html")) {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    } else {
+      res.setHeader("Cache-Control", "no-cache");
+    }
+  },
+};
+app.use(express.static(PUBLIC_DIR, staticOpts));
 
 const server = app.listen(PORT, () => {
   console.log(`fenqun-system API: http://localhost:${PORT}/api/health`);
