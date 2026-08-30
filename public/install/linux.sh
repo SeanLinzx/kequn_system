@@ -177,8 +177,23 @@ step_done 5 "写入配置"
 step_begin 6 "自动绑定门店"
 echo "==> 调 bootstrap 自动绑定门店..."
 BOOTSTRAP="$(curl -fsSL -H "X-Access-Token: $TOKEN" "${SERVER_URL}/api/edge/bootstrap" || echo '')"
-STORE_ID="$(echo "$BOOTSTRAP" | grep -o '"id"[[:space:]]*:[[:space:]]*[0-9]*' | head -1 | sed 's/.*:[[:space:]]*//' || true)"
-STORE_NAME="$(echo "$BOOTSTRAP" | grep -o '"name"[^,]*' | head -1 | sed 's/.*"name"[[:space:]]*:[[:space:]]*"//;s/"$//' || true)"
+# 用 node 解析（grep 取第一个 id 会误取 token.id，而非 store.id）
+STORE_ID="$("$NODE_BIN" -e "
+try {
+  const b = JSON.parse(process.argv[1]);
+  // 门店令牌：token.storeId；品牌令牌：取第一家有 bound=false 的门店
+  const id = b.token?.storeId != null ? b.token.storeId : (b.stores || []).find(s => s.bound === false)?.id ?? (b.stores || [])[0]?.id ?? null;
+  process.stdout.write(String(id ?? ''));
+} catch (e) { process.stdout.write(''); }
+" "$BOOTSTRAP" 2>/dev/null || true)"
+STORE_NAME="$("$NODE_BIN" -e "
+try {
+  const b = JSON.parse(process.argv[1]);
+  const id = b.token?.storeId != null ? b.token.storeId : null;
+  const s = (b.stores || []).find(x => x.id === id) || (b.stores || [])[0];
+  process.stdout.write(s?.name ?? '');
+} catch (e) { process.stdout.write(''); }
+" "$BOOTSTRAP" 2>/dev/null || true)"
 if [ -n "$STORE_ID" ]; then
   "$NODE_BIN" -e "
 const fs = require('fs');
